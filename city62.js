@@ -4,7 +4,7 @@
   const STYLE = document.createElement('style');
   STYLE.id = 'city62-style';
   STYLE.textContent = `
-    #v5field.city62-grid{display:grid!important;grid-template-columns:repeat(var(--city-size),minmax(0,1fr))!important;gap:3px!important;padding:7px!important;max-width:650px;margin:10px auto!important;background:linear-gradient(145deg,#07151d,#102b32 55%,#07131b)!important;border:3px solid #456b70!important;border-radius:12px!important;box-shadow:inset 0 0 28px #000b,0 8px 20px #0008!important;touch-action:pan-y!important}
+    #v5field.city62-grid{display:grid!important;grid-template-columns:repeat(var(--city-size),minmax(0,1fr))!important;gap:3px!important;padding:7px!important;max-width:650px;margin:10px auto!important;background:linear-gradient(145deg,#07151d,#102b32 55%,#07131b)!important;border:3px solid #456b70!important;border-radius:12px!important;box-shadow:inset 0 0 28px #000b,0 8px 20px #0008!important;touch-action:none!important}
     #v5field.city62-grid .city62-tile{aspect-ratio:1;min-width:0;display:grid;place-items:center;padding:0!important;border:1px solid #29454a!important;border-radius:3px!important;background:repeating-linear-gradient(135deg,#35494a 0 5px,#263a3c 5px 10px)!important;color:#e9ffff;font-size:clamp(11px,3.2vw,24px);font-weight:900;text-shadow:0 2px 4px #000;box-shadow:inset 2px 2px #ffffff12,inset -3px -3px #0008!important;overflow:hidden}
     #v5field.city62-grid .city62-tile.wall{background:repeating-linear-gradient(45deg,#15282b 0 5px,#20373a 5px 10px)!important;border-color:#304c50!important}
     #v5field.city62-grid .city62-tile.fog{background:#050d13!important;border-color:#0a171c!important;color:transparent!important;filter:none!important}
@@ -117,7 +117,7 @@
     function end(won,reason){
       if(done)return;done=true;window.__city62Token++;
       field.hidden=true;out.replaceChildren();
-      if(won){stats.wins++;stats.relics+=required;saveStats(stats);rewardChallenge(34+Math.max(0,maxMoves-moves)*.18,'Древний город исследован! Ты вернулся с реликвиями.');ach('Повелитель Древнего города');ach('Тихий исследователь');}
+      if(won){stats.wins++;saveStats(stats);rewardChallenge(34+Math.max(0,maxMoves-moves)*.18,'Древний город исследован! Ты вернулся с реликвиями.');ach('Повелитель Древнего города');ach('Тихий исследователь');}
       const title=document.createElement('h3');title.textContent=won?'🏆 Экспедиция завершена!':'💔 Экспедиция окончена';out.append(title);
       const summary=document.createElement('p');summary.textContent=reason+' · Реликвии: '+relics.filter(r=>r.found).length+'/'+required+' · Сундуки: '+chests.filter(c=>c.opened).length+'/'+chestCount+' · Шаги: '+moves;out.append(summary);
       const record=document.createElement('p');record.className='city62-help';record.textContent='📜 Всего экспедиций: '+stats.runs+' · Побед: '+stats.wins+' · Найдено реликвий: '+stats.relics+' · Открыто сундуков: '+stats.chests;out.append(record);
@@ -153,7 +153,7 @@
     }
     function useLantern(){if(done||!wardenAwake||wardenStun>0||lantern<=0)return;lantern--;wardenStun=4;noise=Math.max(0,noise-2);setLog('🔦 Душевный фонарь ослепил Стража на 4 хода!');hud();render()}
     function diary(){const lines=['Экспедиция №'+stats.runs,'Сложность: '+difficulty,'Найдено реликвий: '+relics.filter(r=>r.found).length+'/'+required,'Открыто сундуков: '+chests.filter(c=>c.opened).length+'/'+chestCount,'Страж: '+(wardenAwake?'проснулся':'не проснулся'),'Шум: '+noise+'/7','Здоровье: '+health+'/'+maxHealth];setLog('📜 '+lines.join(' · '))}
-    function moveByKey(e){if(e.altKey||e.ctrlKey||e.metaKey||e.repeat)return;const keys={ArrowUp:[0,-1],KeyW:[0,-1],ArrowLeft:[-1,0],KeyA:[-1,0],ArrowDown:[0,1],KeyS:[0,1],ArrowRight:[1,0],KeyD:[1,0]};const v=keys[e.code];if(v&&field.isConnected&&!field.hidden){e.preventDefault();move(v[0],v[1])}}
+    function moveByKey(e){if(token!==window.__city62Token||!field.classList.contains('city62-grid')||e.altKey||e.ctrlKey||e.metaKey||e.repeat)return;const keys={ArrowUp:[0,-1],KeyW:[0,-1],ArrowLeft:[-1,0],KeyA:[-1,0],ArrowDown:[0,1],KeyS:[0,1],ArrowRight:[1,0],KeyD:[1,0]};const v=keys[e.code];if(v&&field.isConnected&&!field.hidden){e.preventDefault();move(v[0],v[1])}}
     moveUp.onclick=()=>move(0,-1);moveLeft.onclick=()=>move(-1,0);moveDown.onclick=()=>move(0,1);moveRight.onclick=()=>move(1,0);
     lanternBtn.onclick=useLantern;statsBtn.onclick=diary;
     let touch=null;field.onpointerdown=e=>{touch=[e.clientX,e.clientY]};field.onpointerup=e=>{if(!touch)return;const dx=e.clientX-touch[0],dy=e.clientY-touch[1];touch=null;if(Math.max(Math.abs(dx),Math.abs(dy))<18)return;Math.abs(dx)>Math.abs(dy)?move(Math.sign(dx),0):move(0,Math.sign(dy))};
