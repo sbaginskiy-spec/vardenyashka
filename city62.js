@@ -98,9 +98,12 @@
       const veins=[[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[10,11],[11,12],[12,13],[22,3],[21,4],[20,5],[19,6],[18,7],[17,8],[16,9],[15,10],[14,11],[13,12],[5,25],[6,24],[7,23],[8,22],[9,21],[24,23],[23,22],[22,21],[21,20]];
       for(const [x,y] of veins)px(3,x,y,'#17615e');
       for(const [x,y] of [[4,5],[8,9],[20,5],[16,9],[7,23],[22,21],[13,12],[25,12],[11,27]]){rect(3,x,y,2,2,'#238b83');px(3,x,y,'#79e8d7');px(3,x+1,y+1,'#15534f')}
-      // 4: Warden skin — mostly matte blue-black with sparse pixel mottling, no mechanical stripes.
-      noise(4,'#101d27',['#142b34','#1b3540','#0c1821','#203a43','#12242e','#172c36'],29,53);
-      for(const [x,y] of [[4,6],[9,11],[24,7],[27,14],[7,23],[22,25],[14,4],[18,28],[11,18],[25,20],[5,28],[29,4]]){px(4,x,y,'#34515b');if(x<29)px(4,x+1,y,'#1b3540')}
+      // 4: Warden skin — the recognizable dark teal / muted turquoise Minecraft palette.
+      noise(4,'#244b49',['#1b3e40','#2b5652','#315d57','#17373a','#3b6960','#204744','#142f34'],29,47);
+      // Irregular dark patches on the hide, with restrained mossy-teal highlights.
+      for(const [x,y] of [[3,5],[4,5],[5,6],[6,7],[7,7],[8,8],[23,4],[24,5],[25,6],[26,7],[27,8],[22,9],[5,22],[6,23],[7,24],[8,25],[23,22],[24,23],[25,24],[26,25],[13,3],[14,4],[17,27],[18,28]]){px(4,x,y,'#102c32');if(x<29)px(4,x+1,y,'#193a3b')}
+      for(const [x,y] of [[10,4],[11,5],[20,5],[21,6],[4,17],[5,18],[26,17],[27,18],[14,25],[15,26],[19,11],[20,12]])px(4,x,y,'#47766a');
+      for(const [x,y] of [[2,13],[29,14],[11,29],[20,2],[16,18],[8,13]])px(4,x,y,'#5b8574')
       // 5: a simple cyan soul-core, used only on the small chest organ.
       rect(5,0,0,T,T,'#0b252d');rect(5,3,3,26,26,'#123943');rect(5,5,5,22,22,'#0b2b34');
       rect(5,11,7,10,18,'#155b61');rect(5,12,8,8,16,'#218b89');rect(5,14,9,4,14,'#4bc9bd');
@@ -139,7 +142,7 @@
     function drawWarden3D(add,x,z){
       const yaw=Math.atan2(pos.x*2+1-x,-(pos.y*2+1-z));
       const part=(lx,y,lz,sx,sy,sz,type,tint,rz)=>{const wx=x+lx*Math.cos(yaw)+lz*Math.sin(yaw),wz=z-lx*Math.sin(yaw)+lz*Math.cos(yaw);add(wx,y,wz,sx,sy,sz,type,tint,yaw,rz||0)};
-      const skin=[.86,.96,1],shade=[.62,.8,.88],sculk=[.48,.9,.94],cyan=wardenAwake?[.55,1,1]:[.18,.52,.58];
+      const skin=[.96,1.06,.92],shade=[.78,.94,.82],sculk=[.52,.88,.78],cyan=wardenAwake?[.62,1,1]:[.2,.55,.52];
       const breathe=Math.sin(Date.now()/(wardenAwake?270:950))*(wardenAwake?.018:.008);
       if(!wardenAwake){
         // Quiet, low silhouette: the Warden is dormant beneath the sculk.
