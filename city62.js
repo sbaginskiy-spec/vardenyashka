@@ -169,12 +169,27 @@
       // Each maze cell becomes a 2x2 Minecraft-style block bay, so corridors have room to read as spaces.
       for(let y=0;y<size;y++)for(let x=0;x<size;x++){
         const cx=worldX(x),cz=worldZ(y);
-        add(cx,-.075,cz,2,.15,2,(x+y)%4===0?2:1,[.76,.82,.83],0,0);
+        // Tile floors and ceilings as individual one-metre blocks so 16x16 pixels never stretch across a large slab.
+        for(let by=0;by<2;by++)for(let bx=0;bx<2;bx++){
+          const tx=cx+(bx-.5),tz=cz+(by-.5);
+          add(tx,-.075,tz,1,.15,1,(x+y+bx+by)%4===0?2:1,[.76,.82,.83],0,0);
+        }
         if(map[y][x]===1){
-          add(cx,1.43,cz,2,2.86,2,0,[.9,.96,1],0,0);
-          add(cx,2.91,cz,2.04,.12,2.04,2,[.72,.8,.82],0,0);
+          // A wall cell is a 2x3x2 arrangement of real 1x1x1 blocks.
+          // Each block gets its own complete 16x16 texture instead of stretching one tile over a 2x2x2.86 cube.
+          for(let by=0;by<3;by++)for(let bz=0;bz<2;bz++)for(let bx=0;bx<2;bx++){
+            const tx=cx+(bx-.5),tz=cz+(bz-.5),variant=(x*7+y*11+bx*3+bz+by)%9;
+            const material=variant===0?2:variant===4?1:0;
+            const shade=variant===1?.86:variant===6?.94:1;
+            add(tx,.5+by,tz,1,1,1,material,[shade,shade,shade],0,0);
+          }
+          for(let bz=0;bz<2;bz++)for(let bx=0;bx<2;bx++){
+            add(cx+(bx-.5),3.0,cz+(bz-.5),1,.12,1,2,[.72,.8,.82],0,0);
+          }
         }else{
-          add(cx,3.0,cz,2,.12,2,2,[.42,.52,.55],0,0);
+          for(let bz=0;bz<2;bz++)for(let bx=0;bx<2;bx++){
+            add(cx+(bx-.5),3.0,cz+(bz-.5),1,.12,1,2,[.42,.52,.55],0,0);
+          }
           // Deepslate floor seams and sculk patches add scale and depth without blocking movement.
           if((x*13+y*7)%7===0)add(cx,.012,cz,.62,.025,.62,3,[.75,1,1],0,0);
           if((x+y*3)%5===0){
