@@ -1,4 +1,4 @@
-/* Варденяшка 7.19 — click-to-collect artifacts and full-screen Ancient City. */
+/* Варденяшка 7.21 — open Ancient City with plazas, ruins and central gateway. */
 (() => {
   'use strict';
   const STYLE_ID='city70-style';
@@ -63,9 +63,29 @@
   const DIRS=[[0,-1],[1,0],[0,1],[-1,0]],clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   window.startCity62=function({difficulty,makeMaze,field,out,rewardChallenge,ach,btn,challengeFail,changeCoins,clear}){
     clear();const token=window.__city70Token=(window.__city70Token||0)+1;
-    const size=difficulty==='easy'?9:difficulty==='hard'?13:11,maxMoves=difficulty==='easy'?150:difficulty==='hard'?230:190,maxHealth=difficulty==='easy'?5:3,required=difficulty==='hard'?4:3;
-    const map=makeMaze(size),start={x:1,y:1},portal={x:1,y:1},pos={x:1,y:1};let facing=DIRS.findIndex(([dx,dy])=>!!(map[start.y+dy]&&map[start.y+dy][start.x+dx]===0));if(facing<0)facing=1;
-    const reachable=[];for(let y=1;y<size-1;y++)for(let x=1;x<size-1;x++)if(map[y][x]===0&&!(x===1&&y===1))reachable.push({x,y});shuffle(reachable);
+    const size=difficulty==='easy'?19:difficulty==='hard'?25:23,maxMoves=difficulty==='easy'?340:difficulty==='hard'?520:440,maxHealth=difficulty==='easy'?5:3,required=difficulty==='hard'?4:3;
+    // Open Ancient City: broad streets, plazas and scattered ruined buildings instead of a maze.
+    function makeAncientCity(n){
+      const m=Array.from({length:n},(_,y)=>Array.from({length:n},(_,x)=>x===0||y===0||x===n-1||y===n-1?1:0));
+      const mid=Math.floor(n/2);
+      const ruins=[[3,3],[n-6,3],[3,n-6],[n-6,n-6],[mid,3],[mid,n-6],[3,mid],[n-6,mid]];
+      for(const [rx,ry] of ruins){
+        for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+          const x=rx+dx,y=ry+dy;
+          if(x<2||y<2||x>=n-2||y>=n-2)continue;
+          const edge=Math.abs(dx)===2||Math.abs(dy)===2;
+          const gate=(dx===0&&Math.abs(dy)===2)||(dy===0&&Math.abs(dx)===2);
+          const broken=((x*17+y*23)%7===0);
+          if(edge&&!gate&&!broken)m[y][x]=1;
+        }
+      }
+      // Cross-shaped main roads and an open central plaza around the portal.
+      for(let y=1;y<n-1;y++)for(let x=1;x<n-1;x++)
+        if(Math.abs(x-mid)<=1||Math.abs(y-mid)<=1||(Math.abs(x-mid)<=3&&Math.abs(y-mid)<=3))m[y][x]=0;
+      return m;
+    }
+    const map=makeAncientCity(size),start={x:Math.floor(size/2),y:Math.floor(size/2)},portal={...start},pos={...start};let facing=DIRS.findIndex(([dx,dy])=>!!(map[start.y+dy]&&map[start.y+dy][start.x+dx]===0));if(facing<0)facing=1;
+    const reachable=[];for(let y=1;y<size-1;y++)for(let x=1;x<size-1;x++)if(map[y][x]===0&&!(x===start.x&&y===start.y)&&Math.abs(x-start.x)+Math.abs(y-start.y)>3)reachable.push({x,y});shuffle(reachable);
     const relics=reachable.splice(0,required).map(p=>({...p,found:false})),chestCount=difficulty==='easy'?3:difficulty==='hard'?5:4,chests=reachable.splice(0,chestCount).map(p=>({...p,opened:false})),sensorCount=difficulty==='easy'?3:difficulty==='hard'?7:5,sensors=reachable.splice(0,sensorCount).map(p=>({...p,triggered:false})),woolCount=difficulty==='hard'?2:3,wool=reachable.splice(0,woolCount),spawnDistances=distanceMap(map,start);reachable.sort((a,b)=>(spawnDistances.get(b.x+','+b.y)||0)-(spawnDistances.get(a.x+','+a.y)||0));const wardenSpawn={...(reachable.shift()||{x:size-2,y:size-2})};let warden={...wardenSpawn};
     const stats=readStats();stats.runs++;saveStats(stats);let moves=0,health=maxHealth,lantern=difficulty==='hard'?2:3,noise=0,wardenAwake=false,wardenStun=0,done=false,crouching=false,mapOpen=false;
     // The player moves continuously in world space; grid cells are used only for collisions and discoveries.
@@ -81,7 +101,7 @@
     const wrap=document.createElement('div');wrap.className='city70-wrap';out.append(wrap);
     const hudBox=document.createElement('div');hudBox.className='city70-hud';wrap.append(hudBox);
     const view=document.createElement('div');view.className='city70-view';wrap.append(view);
-    const canvas=document.createElement('canvas');canvas.className='city70-canvas';canvas.setAttribute('aria-label','Трёхмерный вид от первого лица: коридоры Древнего города');view.append(canvas);
+    const canvas=document.createElement('canvas');canvas.className='city70-canvas';canvas.setAttribute('aria-label','Трёхмерный вид от первого лица: открытый Древний город');view.append(canvas);
     const label=document.createElement('div');label.className='city70-view-label';label.textContent='🎮 3D · WebGL · ДРЕВНИЙ ГОРОД';view.append(label);
     const fullscreenBtn=document.createElement('button');fullscreenBtn.type='button';fullscreenBtn.className='city70-fullscreen-btn';fullscreenBtn.textContent='⛶ На весь экран';fullscreenBtn.setAttribute('aria-label','Включить полноэкранный режим');view.append(fullscreenBtn);
     const interactHint=document.createElement('div');interactHint.className='city70-interact-hint';interactHint.textContent='👆 Нажми на сундук или реликвию · ПК: E';view.append(interactHint);
@@ -313,7 +333,7 @@
     }
     function buildWorld(){
       const verts=[],add=(...a)=>addCube(verts,...a),worldX=x=>x*2+1,worldZ=y=>y*2+1;
-      // Each maze cell becomes a 2x2 Minecraft-style block bay, so corridors have room to read as spaces.
+      // Broad open city blocks, ruined houses, a central plaza and sculk-covered streets.
       for(let y=0;y<size;y++)for(let x=0;x<size;x++){
         const cx=worldX(x),cz=worldZ(y);
         // Tile floors and ceilings as individual one-metre blocks so 64x64 pixels never stretch across a large slab.
@@ -334,9 +354,7 @@
             add(cx+(bx-.5),3.0,cz+(bz-.5),1,.12,1,2,[.72,.8,.82],0,0);
           }
         }else{
-          for(let bz=0;bz<2;bz++)for(let bx=0;bx<2;bx++){
-            add(cx+(bx-.5),3.0,cz+(bz-.5),1,.12,1,2,[.42,.52,.55],0,0);
-          }
+          // No low corridor ceiling: the city is inside a vast cavern.
           // Deepslate floor seams and sculk patches add scale and depth without blocking movement.
           if((x*13+y*7)%7===0)add(cx,.012,cz,.62,.025,.62,3,[.75,1,1],0,0);
           if((x+y*3)%5===0){
@@ -357,7 +375,15 @@
       for(const r of relics)if(!r.found){const x=worldX(r.x),z=worldZ(r.y);add(x,.38,z,.34,.48,.28,3,[.42,1,1],0,0);add(x,.68,z,.2,.28,.2,3,[.85,1,1],0,.12)}
       for(const ch of chests)if(!ch.opened){const x=worldX(ch.x),z=worldZ(ch.y);add(x,.22,z,.82,.42,.72,0,[.9,.62,.3],0,0);add(x,.47,z-.01,.82,.13,.72,0,[1,.72,.38],0,0);add(x,.3,z-.37,.12,.12,.04,2,[1,.9,.6],0,0)}
       for(const sensor of sensors)if(!sensor.triggered){const x=worldX(sensor.x),z=worldZ(sensor.y);add(x,.13,z,.58,.26,.58,3,[.45,1,1],0,0);add(x,.29,z,.22,.08,.22,3,[.8,1,1],0,0)}
+      // The iconic reinforced-deepslate gateway towers over the central square.
       const px=worldX(portal.x),pz=worldZ(portal.y);
+      for(const side of [-1,1])for(let h=0;h<7;h++)add(px+side*3.1,h+.5,pz+3.2,1.2,1,1.2,0,[.38,.55,.6],0,0);
+      for(let j=-3;j<=3;j++)add(px+j,7.2,pz+3.2,1,.95,1.3,0,[.4,.65,.7],0,0);
+      for(let j=-2;j<=2;j++)add(px+j,6.35,pz+3.2,.7,.45,.85,3,[.25,.72,.8],0,0);
+      for(const [dx,dz] of [[-4,-4],[4,-4],[-4,4],[4,4]]){
+        add(px+dx,.7,pz+dz,.75,1.4,.75,0,[.6,.72,.76],0,0);
+        add(px+dx,1.48,pz+dz,.34,.2,.34,3,[.55,1,1],0,0);
+      }
       add(px-.78,.9,pz,.18,1.8,.24,2,[.48,.82,.85],0,0);add(px+.78,.9,pz,.18,1.8,.24,2,[.48,.82,.85],0,0);add(px,1.78,pz,1.72,.16,.24,3,[.25,.85,.86],0,0);
       return new Float32Array(verts);
     }
