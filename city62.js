@@ -1,4 +1,4 @@
-/* Варденяшка 7.17 — continuous movement and hold-to-sprint. */
+/* Варденяшка 7.18 — continuous Warden pursuit, pathfinding and real-time attacks. */
 (() => {
   'use strict';
   const STYLE_ID='city70-style';
@@ -44,13 +44,17 @@
     const map=makeMaze(size),start={x:1,y:1},portal={x:1,y:1},pos={x:1,y:1};let facing=DIRS.findIndex(([dx,dy])=>!!(map[start.y+dy]&&map[start.y+dy][start.x+dx]===0));if(facing<0)facing=1;
     const reachable=[];for(let y=1;y<size-1;y++)for(let x=1;x<size-1;x++)if(map[y][x]===0&&!(x===1&&y===1))reachable.push({x,y});shuffle(reachable);
     const relics=reachable.splice(0,required).map(p=>({...p,found:false})),chestCount=difficulty==='easy'?3:difficulty==='hard'?5:4,chests=reachable.splice(0,chestCount).map(p=>({...p,opened:false})),sensorCount=difficulty==='easy'?3:difficulty==='hard'?7:5,sensors=reachable.splice(0,sensorCount).map(p=>({...p,triggered:false})),woolCount=difficulty==='hard'?2:3,wool=reachable.splice(0,woolCount),spawnDistances=distanceMap(map,start);reachable.sort((a,b)=>(spawnDistances.get(b.x+','+b.y)||0)-(spawnDistances.get(a.x+','+a.y)||0));const wardenSpawn={...(reachable.shift()||{x:size-2,y:size-2})};let warden={...wardenSpawn};
-    const stats=readStats();stats.runs++;saveStats(stats);let moves=0,health=maxHealth,lantern=difficulty==='hard'?2:3,noise=0,wardenAwake=false,wardenStun=0,wardenStep=0,done=false,crouching=false,mapOpen=false;
+    const stats=readStats();stats.runs++;saveStats(stats);let moves=0,health=maxHealth,lantern=difficulty==='hard'?2:3,noise=0,wardenAwake=false,wardenStun=0,done=false,crouching=false,mapOpen=false;
     // The player moves continuously in world space; grid cells are used only for collisions and discoveries.
     let cameraX=pos.x*2+1,cameraZ=pos.y*2+1,cameraYaw=facing*Math.PI/2,cameraPitch=0,cameraBob=0,cameraAnimation=null,cameraFrame=0,queuedAction=null,worldVerts=null,worldDirty=true;
     const heldKeys=new Set(),heldPointers=new Map(),KEY_ACTION={ArrowUp:'forward',KeyW:'forward',ArrowDown:'back',KeyS:'back',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ShiftLeft:'sprint',ShiftRight:'sprint'};
     let movementFrame=0,lastMovementTime=0,wallMessageAt=0;
     const PLAYER_RADIUS=.27,MOVE_SPEED=3.25,SPRINT_MULTIPLIER=1.7,TURN_SPEED=2.1;
     let wardenMotion=null,wardenAttackAt=0,wardenWakeAt=0,wardenFrame=0,wardenLastFrame=0;
+    let wardenWorldX=wardenSpawn.x*2+1,wardenWorldZ=wardenSpawn.y*2+1,wardenWaypoint=null;
+    let wardenChaseLast=0,wardenStunUntil=0,wardenAttackCooldown=0,wardenMapRefresh=0;
+    const WARDEN_SPEED=difficulty==='easy'?1.95:difficulty==='hard'?2.8:2.35;
+    const wardenAutoWakeAt=performance.now()+4000;
     const wrap=document.createElement('div');wrap.className='city70-wrap';out.append(wrap);
     const hudBox=document.createElement('div');hudBox.className='city70-hud';wrap.append(hudBox);
     const view=document.createElement('div');view.className='city70-view';wrap.append(view);
@@ -73,7 +77,7 @@
     function actionButton(text,aria,fn){const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',aria);b.addEventListener('click',fn);actions.append(b);return b}
     const lanternBtn=actionButton('🔦 Фонарь ×'+lantern,'Использовать душевный фонарь',useLantern),mapBtn=actionButton('🗺️ Карта','Показать карту города',toggleMap),diaryBtn=actionButton('📜 Дневник','Открыть дневник экспедиции',diary);
     const mapPanel=document.createElement('div');mapPanel.className='city70-map';wrap.append(mapPanel);
-    const help=document.createElement('p');help.className='city70-help';help.textContent='Движение: удерживай «Вперёд» или «Назад» — Варденяшка идёт непрерывно и может остановиться между блоками. Удерживай «Влево» или «Вправо» для плавного поворота. Для спринта удерживай «🏃 Спринт» вместе с «Вперёд» (на ПК — W + Shift): скорость ×1.7, в тихом режиме спринт отключён. На компьютере — WASD или стрелки. Обзор: проведи пальцем по 3D-окну. Включи тихий шаг, чтобы не поднимать шум.';wrap.append(help);
+    const help=document.createElement('p');help.className='city70-help';help.textContent='Движение: удерживай «Вперёд» или «Назад», для спринта — «🏃 Спринт» вместе с «Вперёд» (на ПК W + Shift). Страж проснётся через несколько секунд и будет преследовать тебя постоянно, даже если стоишь! Фонарь останавливает его на 4 секунды. Обзор: проведи пальцем по 3D-окну. На компьютере — WASD или стрелки.';wrap.append(help);
     field.hidden=true;let cssW=360,cssH=300,dpr=1;
     const gl=canvas.getContext('webgl',{alpha:false,antialias:true,depth:true,stencil:false,powerPreference:'low-power'})||canvas.getContext('experimental-webgl',{alpha:false,antialias:true,depth:true,stencil:false});
     let glProgram=null,glBuffer=null,wardenBuffer=null,atlasTexture=null,glReady=false;
@@ -203,7 +207,7 @@
       for(const face of faces)for(const idx of order){const p=face.p[idx];let x=p[0]*sx,y=p[1]*sy,z=p[2]*sz;const rx=x*cr-y*sr,ry=x*sr+y*cr,wx=cx+rx*co+z*si,wz=cz-rx*si+z*co,t=uv[idx];out.push(wx,cy+ry,wz,t[0],t[1],base[0]*face.l,base[1]*face.l,base[2]*face.l)}
     }
     function drawWarden3D(add,x,z,now){
-      const time=now||performance.now(),yaw=Math.atan2(pos.x*2+1-x,-(pos.y*2+1-z));
+      const time=now||performance.now(),yaw=Math.atan2(cameraX-x,-(cameraZ-z));
       const motion=wardenMotion,walking=!!motion&&motion.phase!=='retreat';
       const gait=walking?Math.sin((time-motion.started)/92):0;
       const attack=wardenAttackAt?Math.max(0,1-(time-wardenAttackAt)/620):0;
@@ -332,21 +336,15 @@
       add(px-.78,.9,pz,.18,1.8,.24,2,[.48,.82,.85],0,0);add(px+.78,.9,pz,.18,1.8,.24,2,[.48,.82,.85],0,0);add(px,1.78,pz,1.72,.16,.24,3,[.25,.85,.86],0,0);
       return new Float32Array(verts);
     }
-    function wardenVisualPosition(now){
-      if(!wardenMotion)return {x:warden.x*2+1,z:warden.y*2+1};
-      const m=wardenMotion,t=clamp((now-m.started)/m.duration,0,1),ease=t*t*(3-2*t);
-      const p={x:m.fromX+(m.toX-m.fromX)*ease,z:m.fromZ+(m.toZ-m.fromZ)*ease};
-      if(t>=1){
-        if(m.phase==='lunge'){
-          m.phase='retreat';m.fromX=m.toX;m.fromZ=m.toZ;m.toX=m.retreatX;m.toZ=m.retreatZ;m.started=now;m.duration=470;
-        }else wardenMotion=null;
-      }
-      return p;
-    }
+    function wardenVisualPosition(){return {x:wardenWorldX,z:wardenWorldZ}}
     function startWardenLoop(){
       if(wardenFrame||done)return;
       const tick=now=>{
         if(done||token!==window.__city70Token){wardenFrame=0;return}
+        const dt=wardenChaseLast?Math.min(.05,Math.max(0,(now-wardenChaseLast)/1000)):0;
+        wardenChaseLast=now;
+        updateWardenChase(now,dt);
+        if(done){wardenFrame=0;return}
         const interval=wardenAwake?34:90;
         if(!wardenLastFrame||now-wardenLastFrame>=interval){wardenLastFrame=now;drawScene()}
         wardenFrame=requestAnimationFrame(tick);
@@ -391,38 +389,74 @@
       const record=document.createElement('p');record.className='city70-help';record.textContent='📜 Экспедиций: '+stats.runs+' · Побед: '+stats.wins+' · Найдено реликвий: '+stats.relics+' · Открыто сундуков: '+stats.chests;wrap.append(record);
       btn('🏛️ Новая экспедиция',()=>window.city70Restart&&window.city70Restart());btn('↩️ В приключения',()=>{const b=document.querySelector('[data-v5="city"]');if(b)b.click()});
     }
-    function wardenMove(){
-      if(!wardenAwake||wardenStun>0)return;
-      const from={...warden},distances=distanceMap(map,pos);let best=null,bestD=Infinity;
-      for(const [dx,dy] of DIRS){
-        const p={x:warden.x+dx,y:warden.y+dy};
-        if(!map[p.y]||map[p.y][p.x]!==0)continue;
-        const d=distances.get(p.x+','+p.y);
-        if(d!==undefined&&d<bestD){bestD=d;best=p}
+    function wakeWarden(now){
+      if(wardenAwake||done)return;
+      wardenAwake=true;wardenWakeAt=now;
+      setLog('👁️ СТРАЖ ПРОСНУЛСЯ! Он будет непрерывно искать тебя, даже если ты остановишься. Беги или используй фонарь!');
+      updateHud();startWardenLoop();
+    }
+    function updateWardenChase(now,dt){
+      if(!wardenAwake){
+        if(now>=wardenAutoWakeAt)wakeWarden(now);
+        return;
       }
-      if(!best)return;
-      warden={...best};
-      const now=performance.now(),hit=same(warden,pos);
-      if(hit){
-        health--;wardenAttackAt=now;wardenStun=2;
-        wardenMotion={fromX:from.x*2+1,fromZ:from.y*2+1,toX:warden.x*2+1,toZ:warden.y*2+1,started:now,duration:340,phase:'lunge',retreatX:wardenSpawn.x*2+1,retreatZ:wardenSpawn.y*2+1};
-        warden={...wardenSpawn};
-        setLog('💥 Страж настиг тебя! Потеряно ❤️. Он отступил в тень. Используй фонарь или тихий шаг.');
-        if(health<=0){finish(false,'Страж забрал все силы.');return}
-      }else{
-        wardenMotion={fromX:from.x*2+1,fromZ:from.y*2+1,toX:warden.x*2+1,toZ:warden.y*2+1,started:now,duration:460,phase:'move'};
+      const stunRemaining=Math.ceil(Math.max(0,wardenStunUntil-now)/1000);
+      if(stunRemaining!==wardenStun){
+        const wasStunned=wardenStun>0;wardenStun=stunRemaining;
+        if(wasStunned&&!wardenStun)setLog('👁️ Страж снова движется! Он продолжает погоню.');
+        updateHud();
       }
-      startWardenLoop();
+      if(wardenStun>0){wardenMotion=null;return}
+      if(now-wardenWakeAt<980){wardenMotion=null;return}
+      const playerDistance=Math.hypot(cameraX-wardenWorldX,cameraZ-wardenWorldZ);
+      if(playerDistance<.9&&now>=wardenAttackCooldown){
+        health--;wardenAttackAt=now;wardenAttackCooldown=now+1850;wardenMotion=null;
+        setLog('💥 Страж догнал тебя! -1 ❤️. Он не отступает — беги или оглуши его фонарём!');
+        updateHud();
+        if(health<=0){finish(false,'Страж настиг тебя в Древнем городе.');return}
+      }
+      if(dt<=0)return;
+      // Follow the maze's open cells. Recalculate the next step whenever a waypoint is reached.
+      if(!wardenWaypoint){
+        if(same(warden,pos)){
+          wardenWaypoint={x:cameraX,z:cameraZ,cell:null};
+        }else{
+          const distances=distanceMap(map,pos);
+          let best=null,bestDistance=Infinity;
+          for(const [dx,dy] of DIRS){
+            const nx=warden.x+dx,ny=warden.y+dy;
+            if(!map[ny]||map[ny][nx]!==0)continue;
+            const d=distances.get(nx+','+ny);
+            if(d!==undefined&&d<bestDistance){bestDistance=d;best={x:nx,y:ny}}
+          }
+          if(best)wardenWaypoint={x:best.x*2+1,z:best.y*2+1,cell:best};
+        }
+      }
+      if(wardenWaypoint){
+        const dx=wardenWaypoint.x-wardenWorldX,dz=wardenWaypoint.z-wardenWorldZ,remaining=Math.hypot(dx,dz);
+        if(remaining>.001){
+          const step=Math.min(remaining,WARDEN_SPEED*dt);
+          wardenWorldX+=dx/remaining*step;wardenWorldZ+=dz/remaining*step;
+          if(!wardenMotion)wardenMotion={phase:'chase',started:now};
+        }
+        if(Math.hypot(wardenWaypoint.x-wardenWorldX,wardenWaypoint.z-wardenWorldZ)<.035){
+          wardenWorldX=wardenWaypoint.x;wardenWorldZ=wardenWaypoint.z;
+          if(wardenWaypoint.cell){warden.x=wardenWaypoint.cell.x;warden.y=wardenWaypoint.cell.y}
+          wardenWaypoint=null;
+        }
+      }else wardenMotion=null;
+      // Update the map without rebuilding it on every animation frame.
+      if(mapOpen&&now>=wardenMapRefresh){wardenMapRefresh=now+300;renderMap()}
     }
     function enterCell(){
       const relic=relics.find(r=>!r.found&&same(r,pos));if(relic){relic.found=true;stats.relics++;saveStats(stats);setLog('✨ Найдена древняя реликвия! '+relics.filter(r=>r.found).length+'/'+required)}
       const chest=chests.find(c=>!c.opened&&same(c,pos));if(chest){chest.opened=true;stats.chests++;saveStats(stats);const gems=6+Math.floor(Math.random()*7);changeCoins(gems);lantern++;setLog('📦 Сундук открыт! +'+gems+' 💎 и +1 заряд душевного фонаря.')}
       const sensor=sensors.find(s=>!s.triggered&&same(s,pos));if(sensor){sensor.triggered=true;noise=Math.min(7,noise+3);setLog('🔊 Скалк-сенсор сработал! Шум резко вырос.')}
-      if(noise>=7&&!wardenAwake){wardenAwake=true;wardenWakeAt=performance.now();setLog('👁️ СТРАЖ ПРОСНУЛСЯ! Используй фонарь и тихий шаг.');startWardenLoop()}
+      if(noise>=7&&!wardenAwake)wakeWarden(performance.now())
       if(relics.every(r=>r.found)&&same(pos,portal)){finish(true,'Ты вернулся к порталу с древними реликвиями!');return}
     }
     function toggleCrouch(){if(done)return;crouching=!crouching;setLog(crouching?'🤫 Ты крадёшься. Движение не повышает шум.':'👣 Ты снова идёшь обычным шагом.');updateHud()}
-    function useLantern(){if(done||!wardenAwake||wardenStun>0||lantern<=0)return;lantern--;wardenAttackAt=0;wardenStun=4;noise=Math.max(0,noise-2);setLog('🔦 Душевный фонарь ослепил Стража на 4 хода!');updateHud();drawScene()}
+    function useLantern(){if(done||!wardenAwake||wardenStun>0||lantern<=0)return;lantern--;wardenAttackAt=0;wardenStun=4;wardenStunUntil=performance.now()+4000;wardenMotion=null;noise=Math.max(0,noise-2);setLog('🔦 Душевный фонарь остановил Стража на 4 секунды! Убегай!');updateHud();drawScene()}
     function syncFacingToView(){const nearest=Math.round(cameraYaw/(Math.PI/2));facing=((nearest%4)+4)%4}
     function isHeld(action){for(const code of heldKeys)if(KEY_ACTION[code]===action)return true;for(const held of heldPointers.values())if(held===action)return true;return false}
     function syncSprintButton(){sprintBtn.classList.toggle('is-held',isHeld('sprint'))}
@@ -456,7 +490,6 @@
       pos.x=nx;pos.y=ny;moves++;
       const quiet=crouching||wool.some(w=>same(w,pos));if(!quiet)noise=Math.min(7,noise+1);
       enterCell();if(done)return;
-      if(wardenStun>0)wardenStun--;else if(wardenAwake){wardenStep++;if(wardenStep%2===0)wardenMove()}
       if(done)return;
       if(moves>=maxMoves){finish(false,'Закончился лимит пройденных блоков.');return}
       updateHud();if(mapOpen)renderMap();
