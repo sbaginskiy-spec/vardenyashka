@@ -430,7 +430,7 @@
     function clearHeldInput(){heldKeys.clear();heldPointers.clear();controls.querySelectorAll('button.is-held').forEach(b=>b.classList.remove('is-held'));if(movementFrame)cancelAnimationFrame(movementFrame);movementFrame=0;lastMovementTime=0;if(cameraBob){cameraBob=0;if(!done)drawScene()}}
     function bindHold(button,action){
       button.addEventListener('pointerdown',e=>{
-        if(done||!e.isPrimary||(e.pointerType==='mouse'&&e.button!==0))return;
+        if(done||(e.pointerType==='mouse'&&e.button!==0))return;
         e.preventDefault();heldPointers.set(e.pointerId,action);button.classList.add('is-held');if(action==='sprint')syncSprintButton();
         if(button.setPointerCapture)try{button.setPointerCapture(e.pointerId)}catch(_){}
         startMovementLoop();
@@ -483,7 +483,7 @@
         }
       }
       if(blocked&&now-wallMessageAt>900){setLog('🪨 Впереди древняя стена. Поищи другой проход.');wallMessageAt=now}
-      cameraBob=moved?Math.sin(now*(forwardDir>0&&!crouching&&isHeld('sprint')?.021:.014))*(crouching?.012:.026):0;
+      cameraBob=moved?Math.sin(now*(forwardDir>0&&!crouching&&isHeld('sprint') ? .021 : .014))*(crouching?.012:.026):0;
       if(turnDir||moved)drawScene();
       movementFrame=requestAnimationFrame(movementTick);
     }
