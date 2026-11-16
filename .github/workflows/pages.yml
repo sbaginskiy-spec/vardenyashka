@@ -29,6 +29,11 @@ jobs:
         with:
           enablement: true
 
+      - name: Validate game scripts
+        run: |
+          node --check city62.js
+          node --check mine61.js
+
       - name: Upload website files
         uses: actions/upload-pages-artifact@v3
         with:
