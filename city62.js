@@ -47,7 +47,7 @@
     const wrap=document.createElement('div');wrap.className='city70-wrap';out.append(wrap);
     const hudBox=document.createElement('div');hudBox.className='city70-hud';wrap.append(hudBox);
     const view=document.createElement('div');view.className='city70-view';wrap.append(view);
-    const canvas=document.createElement('canvas');canvas.className='city70-canvas';canvas.setAttribute('aria-label','Пиксельный вид от первого лица: коридоры Древнего города');view.append(canvas);
+    const canvas=document.createElement('canvas');canvas.className='city70-canvas';canvas.setAttribute('aria-label','Трёхмерный вид от первого лица: коридоры Древнего города');view.append(canvas);
     const ctx=canvas.getContext('2d');const label=document.createElement('div');label.className='city70-view-label';label.textContent='👁️ ВИД ОТ ПЕРВОГО ЛИЦА · 2D';view.append(label);
     const log=document.createElement('div');log.className='city70-log';log.setAttribute('aria-live','polite');log.textContent='🏛️ Ты вошёл в Древний город. Найди реликвии и вернись к порталу.';wrap.append(log);
     const controls=document.createElement('div');controls.className='city70-controls';wrap.append(controls);
@@ -145,6 +145,7 @@
       label.textContent=wardenAwake&&wardenStun===0?'👁️ СТРАЖ СЛЫШИТ ТЕБЯ · 3D':'🎮 3D · ДРЕВНИЙ ГОРОД';
     }
     if(!initGL())label.textContent='⚠️ WebGL не поддерживается этим браузером';
+    function same(a,b){return !!a&&a.x===b.x&&a.y===b.y}
     function updateHud(){
       const rows=[['❤️ Здоровье',health+'/'+maxHealth],['💎 Реликвии',relics.filter(r=>r.found).length+'/'+required],['👣 Шаги',moves+'/'+maxMoves],['🔊 Шум',noise+'/7'],['🔦 Фонарь',String(lantern)],['👁️ Страж',wardenStun>0?'Оглушён':wardenAwake?'Охотится':'Спит']];
       hudBox.replaceChildren(...rows.map(([name,value])=>{const el=document.createElement('div');el.className='city70-stat';const span=document.createElement('span');span.textContent=name;const b=document.createElement('b');b.textContent=value;el.append(span,b);return el}));
