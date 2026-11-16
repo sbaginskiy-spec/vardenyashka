@@ -101,7 +101,7 @@
       let zx=eye[0]-center[0],zy=eye[1]-center[1],zz=eye[2]-center[2],n=Math.hypot(zx,zy,zz)||1;zx/=n;zy/=n;zz/=n;
       let xx=up[1]*zz-up[2]*zy,xy=up[2]*zx-up[0]*zz,xz=up[0]*zy-up[1]*zx;n=Math.hypot(xx,xy,xz)||1;xx/=n;xy/=n;xz/=n;
       const yx=zy*xz-zz*xy,yy=zz*xx-zx*xz,yz=zx*xy-zy*xx,o=new Float32Array(16);
-      o[0]=xx;o[1]=xy;o[2]=xz;o[3]=0;o[4]=yx;o[5]=yy;o[6]=yz;o[7]=0;o[8]=zx;o[9]=zy;o[10]=zz;o[11]=0;
+      o[0]=xx;o[1]=yx;o[2]=zx;o[3]=0;o[4]=xy;o[5]=yy;o[6]=zy;o[7]=0;o[8]=xz;o[9]=yz;o[10]=zz;o[11]=0;
       o[12]=-(xx*eye[0]+xy*eye[1]+xz*eye[2]);o[13]=-(yx*eye[0]+yy*eye[1]+yz*eye[2]);o[14]=-(zx*eye[0]+zy*eye[1]+zz*eye[2]);o[15]=1;return o;
     }
     function matMultiply(a,b){const o=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];return o}
