@@ -46,6 +46,7 @@
     const stats=readStats();stats.runs++;saveStats(stats);let moves=0,health=maxHealth,lantern=difficulty==='hard'?2:3,noise=0,wardenAwake=false,wardenStun=0,wardenStep=0,done=false,crouching=false,mapOpen=false;
     // Smooth first-person camera: the maze remains grid-based, while the view glides between cell centres.
     let cameraX=pos.x*2+1,cameraZ=pos.y*2+1,cameraYaw=facing*Math.PI/2,cameraBob=0,cameraAnimation=null,cameraFrame=0,queuedAction=null,worldVerts=null,worldDirty=true;
+    let wardenMotion=null,wardenAttackAt=0,wardenWakeAt=0,wardenFrame=0,wardenLastFrame=0;
     const wrap=document.createElement('div');wrap.className='city70-wrap';out.append(wrap);
     const hudBox=document.createElement('div');hudBox.className='city70-hud';wrap.append(hudBox);
     const view=document.createElement('div');view.className='city70-view';wrap.append(view);
@@ -65,7 +66,7 @@
     const help=document.createElement('p');help.className='city70-help';help.textContent='Управление: кнопки на экране или свайпы по коридору. Ходьба и повороты теперь плавные. Вперёд/назад — движение, лево/право — поворот. На компьютере — WASD или стрелки. Включи тихий шаг, чтобы не поднимать шум.';wrap.append(help);
     field.hidden=true;let cssW=360,cssH=300,dpr=1;
     const gl=canvas.getContext('webgl',{alpha:false,antialias:true,depth:true,stencil:false,powerPreference:'low-power'})||canvas.getContext('experimental-webgl',{alpha:false,antialias:true,depth:true,stencil:false});
-    let glProgram=null,glBuffer=null,atlasTexture=null,glReady=false;
+    let glProgram=null,glBuffer=null,wardenBuffer=null,atlasTexture=null,glReady=false;
     label.textContent='🎮 3D · WebGL · ДРЕВНИЙ ГОРОД';
     function compileShader(type,source){
       const sh=gl.createShader(type);gl.shaderSource(sh,source);gl.compileShader(sh);
@@ -170,7 +171,7 @@
       try{
         const v=compileShader(gl.VERTEX_SHADER,vs),f=compileShader(gl.FRAGMENT_SHADER,fs);glProgram=gl.createProgram();gl.attachShader(glProgram,v);gl.attachShader(glProgram,f);gl.linkProgram(glProgram);
         if(!gl.getProgramParameter(glProgram,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(glProgram)||'Program link failed');
-        gl.deleteShader(v);gl.deleteShader(f);glBuffer=gl.createBuffer();atlasTexture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,atlasTexture);
+        gl.deleteShader(v);gl.deleteShader(f);glBuffer=gl.createBuffer();wardenBuffer=gl.createBuffer();atlasTexture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,atlasTexture);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,makeAtlas());
         gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
         gl.useProgram(glProgram);gl.uniform1i(gl.getUniformLocation(glProgram,'uAtlas'),0);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.CULL_FACE);glReady=true;return true;
@@ -191,57 +192,85 @@
       const faces=[{p:[[-.5,-.5,-.5],[.5,-.5,-.5],[.5,.5,-.5],[-.5,.5,-.5]],l:.88},{p:[[.5,-.5,.5],[-.5,-.5,.5],[-.5,.5,.5],[.5,.5,.5]],l:.68},{p:[[-.5,.5,-.5],[.5,.5,-.5],[.5,.5,.5],[-.5,.5,.5]],l:1.18},{p:[[-.5,-.5,.5],[.5,-.5,.5],[.5,-.5,-.5],[-.5,-.5,-.5]],l:.48},{p:[[-.5,-.5,.5],[-.5,-.5,-.5],[-.5,.5,-.5],[-.5,.5,.5]],l:.76},{p:[[.5,-.5,-.5],[.5,-.5,.5],[.5,.5,.5],[.5,.5,-.5]],l:.98}],uv=[[u0,v0],[u1,v0],[u1,v1],[u0,v1]],order=[0,1,2,0,2,3],co=Math.cos(yaw||0),si=Math.sin(yaw||0),cr=Math.cos(rz||0),sr=Math.sin(rz||0),base=tint||[1,1,1];
       for(const face of faces)for(const idx of order){const p=face.p[idx];let x=p[0]*sx,y=p[1]*sy,z=p[2]*sz;const rx=x*cr-y*sr,ry=x*sr+y*cr,wx=cx+rx*co+z*si,wz=cz-rx*si+z*co,t=uv[idx];out.push(wx,cy+ry,wz,t[0],t[1],base[0]*face.l,base[1]*face.l,base[2]*face.l)}
     }
-    function drawWarden3D(add,x,z){
-      const yaw=Math.atan2(pos.x*2+1-x,-(pos.y*2+1-z));
-      const part=(lx,y,lz,sx,sy,sz,type,tint,rz)=>{const wx=x+lx*Math.cos(yaw)+lz*Math.sin(yaw),wz=z-lx*Math.sin(yaw)+lz*Math.cos(yaw);add(wx,y,wz,sx,sy,sz,type,tint,yaw,rz||0)};
-      const dark=[1,1,1],teal=[1.08,1.12,1.04],rib=[1,1,1],sculk=[.65,.92,.9],cyan=wardenAwake?[.72,1,1]:[.22,.58,.58];
-      const breathe=Math.sin(Date.now()/(wardenAwake?270:950))*(wardenAwake?.018:.008);
+    function drawWarden3D(add,x,z,now){
+      const time=now||performance.now(),yaw=Math.atan2(pos.x*2+1-x,-(pos.y*2+1-z));
+      const motion=wardenMotion,walking=!!motion&&motion.phase!=='retreat';
+      const gait=walking?Math.sin((time-motion.started)/92):0;
+      const attack=wardenAttackAt?Math.max(0,1-(time-wardenAttackAt)/620):0;
+      const stunned=wardenAwake&&wardenStun>0;
+      const shake=stunned?Math.sin(time/34)*.075:0;
+      const headYaw=stunned?Math.sin(time/48)*.17:Math.sin(time/1050)*.085;
+      const breathe=Math.sin(time/(wardenAwake?330:1050))*(wardenAwake?.025:.012);
+      const bob=walking?Math.abs(gait)*.045:stunned?Math.sin(time/42)*.025:0;
+      const part=(lx,y,lz,sx,sy,sz,type,tint,rz,head)=>{
+        const wx=x+lx*Math.cos(yaw)+lz*Math.sin(yaw),wz=z-lx*Math.sin(yaw)+lz*Math.cos(yaw);
+        add(wx,y,wz,sx,sy,sz,type,tint,yaw+(head?headYaw:0),rz||0);
+      };
+      const swingPart=(side,pivotX,pivotY,centerY,lz,sx,sy,sz,type,tint,angle)=>{
+        const length=pivotY-centerY,cx=side*pivotX+length*Math.sin(angle),cy=pivotY-length*Math.cos(angle);
+        part(cx,cy,lz,sx,sy,sz,type,tint,angle);
+      };
+      const dark=[1,1,1],teal=[1.08,1.12,1.04],rib=[1,1,1],cyan=wardenAwake?[.72,1,1]:[.22,.58,.58];
       if(!wardenAwake){
-        part(0,.28,0,1.08,.34,.68,7,dark);
-        part(0,.42,-.08,.78,.34,.55,7,dark);
+        const sleepyBreath=Math.sin(time/1050)*.012;
+        part(0,.28+sleepyBreath,0,1.08,.34,.68,7,dark);
+        part(0,.42+sleepyBreath,-.08,.78,.34,.55,7,dark);
         part(.52,.48,-.02,.42,.25,.42,7,dark,-.12);
         part(-.52,.48,-.02,.42,.25,.42,7,dark,.12);
-        part(0,.47,-.37,.22,.25,.035,5,cyan);
+        part(0,.47+sleepyBreath,-.37,.22,.25,.035,5,cyan);
         return;
       }
-      // Deep blue-black body, teal crown and horns, pale rib-like plates.
-      // Short sturdy legs and blocky feet.
-      part(-.29,.48,.015,.43,.86,.58,7,dark);
-      part(.29,.48,.015,.43,.86,.58,7,dark);
-      part(-.29,.09,-.10,.48,.18,.72,7,dark);
-      part(.29,.09,-.10,.48,.18,.72,7,dark);
-      // Muted pale ankle markings.
-      part(-.29,.22,-.405,.29,.085,.035,6,rib);
-      part(.29,.22,-.405,.29,.085,.035,6,rib);
-      // Main torso and broad shoulders.
-      part(0,1.38+breathe,0,1.16,1.28,.72,7,dark);
-      // Long rectangular arms with the characteristic light outer rib panels.
-      part(-.76,1.27,0,.38,1.34,.58,7,dark,-.025);
-      part(.76,1.27,0,.38,1.34,.58,7,dark,.025);
-      part(-.77,.52,-.04,.4,.36,.54,7,dark);
-      part(.77,.52,-.04,.4,.36,.54,7,dark);
-      part(-.76,1.22,-.302,.245,.83,.045,6,rib,-.035);
-      part(.76,1.22,-.302,.245,.83,.045,6,rib,.035);
-      // Square dark head with a teal pixelated crown.
-      part(0,2.34+breathe,0,.88,.78,.7,7,dark);
-      part(0,2.744+breathe,0,.9,.045,.72,4,teal);
-      part(-.19,2.37+breathe,-.365,.12,.075,.035,3,[.48,1,1]);
-      part(.19,2.37+breathe,-.365,.12,.075,.035,3,[.48,1,1]);
-      // Broad, stepped turquoise horns.
-      part(-.43,2.63,.015,.23,.34,.28,4,teal,-.16);
-      part(-.58,2.79,.015,.22,.34,.26,4,teal,-.38);
-      part(-.73,2.91,.015,.2,.22,.24,4,teal,-.58);
-      part(.43,2.63,.015,.23,.34,.28,4,teal,.16);
-      part(.58,2.79,.015,.22,.34,.26,4,teal,.38);
-      part(.73,2.91,.015,.2,.22,.24,4,teal,.58);
-      // Three pairs of pale rib plates around the cyan soul core.
+      const wakeRaw=wardenWakeAt?clamp((time-wardenWakeAt)/980,0,1):1;
+      const wake=wakeRaw*wakeRaw*(3-2*wakeRaw);
+      const torsoY=.72+.66*wake+breathe+bob;
+      const torsoH=.72+.56*wake;
+      const headY=1.12+1.22*wake+breathe+bob;
+      const headH=.56+.22*wake;
+      const shoulderY=.91+.98*wake;
+      const armHeight=.72+.62*wake;
+      const hipY=.39+.49*wake;
+      const legHeight=.22+.64*wake;
+      const walkSwing=walking?gait*.43:0;
+      const idleSwing=Math.sin(time/610)*.045;
+      const leftArm=stunned?-1.05+shake:attack?-.95*attack+walkSwing:idleSwing+walkSwing;
+      const rightArm=stunned?1.05-shake:attack? .95*attack-walkSwing:-idleSwing-walkSwing;
+      const leftLeg=walking?-gait*.32:0,rightLeg=walking?gait*.32:0;
+      const lean=attack*.12;
+      // Short legs and blocky feet, swinging opposite to the arms.
+      swingPart(-1,.29,hipY,hipY-legHeight/2,-.015,.43,legHeight,.58,7,dark,leftLeg);
+      swingPart(1,.29,hipY,hipY-legHeight/2,-.015,.43,legHeight,.58,7,dark,rightLeg);
+      swingPart(-1,.29,hipY,.12,-.10,.48,.18,.72,7,dark,leftLeg*.65);
+      swingPart(1,.29,hipY,.12,-.10,.48,.18,.72,7,dark,rightLeg*.65);
+      swingPart(-1,.29,hipY,.22,-.405,.29,.085,.035,6,rib,leftLeg*.65);
+      swingPart(1,.29,hipY,.22,-.405,.29,.085,.035,6,rib,rightLeg*.65);
+      // Breathing torso and broad shoulders.
+      part(0,torsoY,-lean,1.16,torsoH,.72,7,dark);
+      // Long arms and their pale rib panels move from the shoulder joints.
+      swingPart(-1,.76,shoulderY,shoulderY-armHeight/2,0,.38,armHeight,.58,7,dark,leftArm);
+      swingPart(1,.76,shoulderY,shoulderY-armHeight/2,0,.38,armHeight,.58,7,dark,rightArm);
+      swingPart(-1,.76,shoulderY,shoulderY-.73,-.302,.245,.83,.045,6,rib,leftArm);
+      swingPart(1,.76,shoulderY,shoulderY-.73,-.302,.245,.83,.045,6,rib,rightArm);
+      // Head gently scans the corridor; during a stun it shakes rapidly.
+      part(0,headY,-lean*.4,.88,headH,.7,7,dark,stunned?shake*.7:0,true);
+      part(0,headY+headH*.52,0,.9,.045,.72,4,teal,0,true);
+      part(-.19,headY+.03,-.365,.12,.075,.035,3,[.48,1,1],0,true);
+      part(.19,headY+.03,-.365,.12,.075,.035,3,[.48,1,1],0,true);
+      // Crown horns rise with the head as the Warden wakes.
+      const hornRise=1.15*wake;
+      part(-.43,1.41+hornRise,.015,.23,.34,.28,4,teal,-.16,true);
+      part(-.58,1.57+hornRise,.015,.22,.34,.26,4,teal,-.38,true);
+      part(-.73,1.69+hornRise,.015,.2,.22,.24,4,teal,-.58,true);
+      part(.43,1.41+hornRise,.015,.23,.34,.28,4,teal,.16,true);
+      part(.58,1.57+hornRise,.015,.22,.34,.26,4,teal,.38,true);
+      part(.73,1.69+hornRise,.015,.2,.22,.24,4,teal,.58,true);
+      // Three pairs of pale ribs and the glowing soul core.
       for(let i=0;i<3;i++){
-        const yy=1.08+i*.2;
+        const yy=.48+wake*.6+i*(.12+wake*.04);
         part(-.285,yy,-.382,.36,.075,.045,6,rib,-.13);
         part(.285,yy,-.382,.36,.075,.045,6,rib,.13);
       }
-      part(0,1.39+breathe,-.415,.23,.3,.06,5,cyan);
-      part(0,1.4+breathe,-.452,.09,.16,.025,3,[.78,1,1]);
+      part(0,torsoY+.01,-.415,.23,.3,.06,5,cyan);
+      part(0,torsoY+.02,-.452,.09,.16,.025,3,[.78,1,1]);
     }
     function buildWorld(){
       const verts=[],add=(...a)=>addCube(verts,...a),worldX=x=>x*2+1,worldZ=y=>y*2+1;
@@ -291,8 +320,28 @@
       for(const sensor of sensors)if(!sensor.triggered){const x=worldX(sensor.x),z=worldZ(sensor.y);add(x,.13,z,.58,.26,.58,3,[.45,1,1],0,0);add(x,.29,z,.22,.08,.22,3,[.8,1,1],0,0)}
       const px=worldX(portal.x),pz=worldZ(portal.y);
       add(px-.78,.9,pz,.18,1.8,.24,2,[.48,.82,.85],0,0);add(px+.78,.9,pz,.18,1.8,.24,2,[.48,.82,.85],0,0);add(px,1.78,pz,1.72,.16,.24,3,[.25,.85,.86],0,0);
-      if(!same(warden,pos)||wardenAwake)drawWarden3D(add,worldX(warden.x),worldZ(warden.y));
       return new Float32Array(verts);
+    }
+    function wardenVisualPosition(now){
+      if(!wardenMotion)return {x:warden.x*2+1,z:warden.y*2+1};
+      const m=wardenMotion,t=clamp((now-m.started)/m.duration,0,1),ease=t*t*(3-2*t);
+      const p={x:m.fromX+(m.toX-m.fromX)*ease,z:m.fromZ+(m.toZ-m.fromZ)*ease};
+      if(t>=1){
+        if(m.phase==='lunge'){
+          m.phase='retreat';m.fromX=m.toX;m.fromZ=m.toZ;m.toX=m.retreatX;m.toZ=m.retreatZ;m.started=now;m.duration=470;
+        }else wardenMotion=null;
+      }
+      return p;
+    }
+    function startWardenLoop(){
+      if(wardenFrame||done)return;
+      const tick=now=>{
+        if(done||token!==window.__city70Token){wardenFrame=0;return}
+        const interval=wardenAwake?34:90;
+        if(!wardenLastFrame||now-wardenLastFrame>=interval){wardenLastFrame=now;drawScene()}
+        wardenFrame=requestAnimationFrame(tick);
+      };
+      wardenFrame=requestAnimationFrame(tick);
     }
     function drawScene(){
       if(!glReady||done)return;if(!worldVerts||worldDirty){worldVerts=buildWorld();worldDirty=false;gl.bindBuffer(gl.ARRAY_BUFFER,glBuffer);gl.bufferData(gl.ARRAY_BUFFER,worldVerts,gl.DYNAMIC_DRAW)}const yaw=cameraYaw,eye=[cameraX,1.57+cameraBob,cameraZ],target=[eye[0]+Math.sin(yaw),1.57+cameraBob,eye[2]-Math.cos(yaw)];
@@ -301,7 +350,16 @@
       const stride=32,position=gl.getAttribLocation(glProgram,'aPosition'),uv=gl.getAttribLocation(glProgram,'aUV'),tint=gl.getAttribLocation(glProgram,'aTint');
       gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,3,gl.FLOAT,false,stride,0);gl.enableVertexAttribArray(uv);gl.vertexAttribPointer(uv,2,gl.FLOAT,false,stride,12);gl.enableVertexAttribArray(tint);gl.vertexAttribPointer(tint,3,gl.FLOAT,false,stride,20);
       gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,atlasTexture);gl.uniformMatrix4fv(gl.getUniformLocation(glProgram,'uViewProjection'),false,vp);gl.uniform3f(gl.getUniformLocation(glProgram,'uCamera'),eye[0],eye[1],eye[2]);gl.uniform3f(gl.getUniformLocation(glProgram,'uFogColor'),.018,.055,.065);gl.drawArrays(gl.TRIANGLES,0,worldVerts.length/8);
-      label.textContent=wardenAwake&&wardenStun===0?'👁️ СТРАЖ СЛЫШИТ ТЕБЯ · 3D':'🎮 3D · ДРЕВНИЙ ГОРОД';
+      if(!same(warden,pos)||wardenAwake||wardenMotion){
+        const wardenVerts=[],addWarden=(...args)=>addCube(wardenVerts,...args),now=performance.now(),wp=wardenVisualPosition(now);
+        drawWarden3D(addWarden,wp.x,wp.z,now);
+        if(wardenVerts.length){
+          gl.bindBuffer(gl.ARRAY_BUFFER,wardenBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(wardenVerts),gl.DYNAMIC_DRAW);
+          gl.vertexAttribPointer(position,3,gl.FLOAT,false,stride,0);gl.vertexAttribPointer(uv,2,gl.FLOAT,false,stride,12);gl.vertexAttribPointer(tint,3,gl.FLOAT,false,stride,20);
+          gl.drawArrays(gl.TRIANGLES,0,wardenVerts.length/8);
+        }
+      }
+      label.textContent=wardenStun>0?'✨ СТРАЖ ОГЛУШЁН':wardenAwake?'👁️ СТРАЖ ОХОТИТСЯ':'🎮 3D · ДРЕВНИЙ ГОРОД';
     }
     if(!initGL())label.textContent='⚠️ WebGL не поддерживается этим браузером';
     function same(a,b){return !!a&&a.x===b.x&&a.y===b.y}
@@ -317,18 +375,40 @@
     let keyHandler=null;
     function finish(won,reason){
       if(done)return;done=true;if(cameraFrame)cancelAnimationFrame(cameraFrame);cameraFrame=0;cameraAnimation=null;queuedAction=null;cameraBob=0;window.__city70Token++;if(won){stats.wins++;saveStats(stats);rewardChallenge(34+Math.max(0,maxMoves-moves)*.18,'Древний город исследован! Ты вернулся с реликвиями.');ach('Повелитель Древнего города');ach('Тихий исследователь')}
-      if(keyHandler)document.removeEventListener('keydown',keyHandler);wrap.replaceChildren();
+      if(keyHandler)document.removeEventListener('keydown',keyHandler);if(wardenFrame)cancelAnimationFrame(wardenFrame);wardenFrame=0;wrap.replaceChildren();
       const title=document.createElement('h3');title.textContent=won?'🏆 Экспедиция завершена!':'💔 Экспедиция окончена';wrap.append(title);
       const summary=document.createElement('p');summary.textContent=reason+' · Реликвии: '+relics.filter(r=>r.found).length+'/'+required+' · Сундуки: '+chests.filter(c=>c.opened).length+'/'+chestCount+' · Шаги: '+moves;wrap.append(summary);
       const record=document.createElement('p');record.className='city70-help';record.textContent='📜 Экспедиций: '+stats.runs+' · Побед: '+stats.wins+' · Найдено реликвий: '+stats.relics+' · Открыто сундуков: '+stats.chests;wrap.append(record);
       btn('🏛️ Новая экспедиция',()=>window.city70Restart&&window.city70Restart());btn('↩️ В приключения',()=>{const b=document.querySelector('[data-v5="city"]');if(b)b.click()});
     }
-    function wardenMove(){if(!wardenAwake||wardenStun>0)return;const distances=distanceMap(map,pos);let best=null,bestD=Infinity;for(const [dx,dy] of DIRS){const p={x:warden.x+dx,y:warden.y+dy};if(!map[p.y]||map[p.y][p.x]!==0)continue;const d=distances.get(p.x+','+p.y);if(d!==undefined&&d<bestD){bestD=d;best=p}}if(best)warden=best;if(same(warden,pos)){health--;warden={...wardenSpawn};wardenStun=2;setLog('💥 Страж настиг тебя! Потеряно ❤️. Он отступил в тень. Используй фонарь или тихий шаг.');if(health<=0){finish(false,'Страж забрал все силы.');return}}}
+    function wardenMove(){
+      if(!wardenAwake||wardenStun>0)return;
+      const from={...warden},distances=distanceMap(map,pos);let best=null,bestD=Infinity;
+      for(const [dx,dy] of DIRS){
+        const p={x:warden.x+dx,y:warden.y+dy};
+        if(!map[p.y]||map[p.y][p.x]!==0)continue;
+        const d=distances.get(p.x+','+p.y);
+        if(d!==undefined&&d<bestD){bestD=d;best=p}
+      }
+      if(!best)return;
+      warden={...best};
+      const now=performance.now(),hit=same(warden,pos);
+      if(hit){
+        health--;wardenAttackAt=now;wardenStun=2;
+        wardenMotion={fromX:from.x*2+1,fromZ:from.y*2+1,toX:warden.x*2+1,toZ:warden.y*2+1,started:now,duration:340,phase:'lunge',retreatX:wardenSpawn.x*2+1,retreatZ:wardenSpawn.y*2+1};
+        warden={...wardenSpawn};
+        setLog('💥 Страж настиг тебя! Потеряно ❤️. Он отступил в тень. Используй фонарь или тихий шаг.');
+        if(health<=0){finish(false,'Страж забрал все силы.');return}
+      }else{
+        wardenMotion={fromX:from.x*2+1,fromZ:from.y*2+1,toX:warden.x*2+1,toZ:warden.y*2+1,started:now,duration:460,phase:'move'};
+      }
+      startWardenLoop();
+    }
     function enterCell(){
       const relic=relics.find(r=>!r.found&&same(r,pos));if(relic){relic.found=true;stats.relics++;saveStats(stats);setLog('✨ Найдена древняя реликвия! '+relics.filter(r=>r.found).length+'/'+required)}
       const chest=chests.find(c=>!c.opened&&same(c,pos));if(chest){chest.opened=true;stats.chests++;saveStats(stats);const gems=6+Math.floor(Math.random()*7);changeCoins(gems);lantern++;setLog('📦 Сундук открыт! +'+gems+' 💎 и +1 заряд душевного фонаря.')}
       const sensor=sensors.find(s=>!s.triggered&&same(s,pos));if(sensor){sensor.triggered=true;noise=Math.min(7,noise+3);setLog('🔊 Скалк-сенсор сработал! Шум резко вырос.')}
-      if(noise>=7&&!wardenAwake){wardenAwake=true;setLog('👁️ СТРАЖ ПРОСНУЛСЯ! Используй фонарь и тихий шаг.')}
+      if(noise>=7&&!wardenAwake){wardenAwake=true;wardenWakeAt=performance.now();setLog('👁️ СТРАЖ ПРОСНУЛСЯ! Используй фонарь и тихий шаг.');startWardenLoop()}
       if(relics.every(r=>r.found)&&same(pos,portal)){finish(true,'Ты вернулся к порталу с древними реликвиями!');return}
     }
     function runOrQueue(action){if(done)return;if(cameraAnimation){if(!queuedAction)queuedAction=action;return}action()}
@@ -365,8 +445,8 @@
     canvas.addEventListener('pointerup',e=>{if(!touchStart||done)return;const dx=e.clientX-touchStart.x,dy=e.clientY-touchStart.y;touchStart=null;if(Math.max(Math.abs(dx),Math.abs(dy))<24)return;if(Math.abs(dx)>Math.abs(dy))turn(dx>0?1:-1);else move(dy<0?1:-1)});
     canvas.addEventListener('pointercancel',()=>{touchStart=null});
     function onResize(){resize()}
-    window.addEventListener('resize',onResize);window.city70Restart=()=>{if(keyHandler)document.removeEventListener('keydown',keyHandler);window.removeEventListener('resize',onResize);const b=document.querySelector('[data-v5="city"]');if(b)b.click()};
+    window.addEventListener('resize',onResize);window.city70Restart=()=>{if(keyHandler)document.removeEventListener('keydown',keyHandler);if(wardenFrame)cancelAnimationFrame(wardenFrame);wardenFrame=0;window.removeEventListener('resize',onResize);const b=document.querySelector('[data-v5="city"]');if(b)b.click()};
     if(window.visualViewport)window.visualViewport.addEventListener('resize',onResize);
-    resize();updateHud();drawScene();
+    resize();updateHud();drawScene();startWardenLoop();
   };
 })();
