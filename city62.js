@@ -1,4 +1,4 @@
-/* Варденяшка 7.18 — continuous Warden pursuit, pathfinding and real-time attacks. */
+/* Варденяшка 7.19 — click-to-collect artifacts and full-screen Ancient City. */
 (() => {
   'use strict';
   const STYLE_ID='city70-style';
@@ -12,6 +12,29 @@
     #v5out .city70-view{position:relative;width:100%;height:clamp(270px,48vh,430px);min-height:270px;overflow:hidden;border:3px solid #456c70;border-radius:12px;background:#07151d;box-shadow:inset 0 0 24px #000b,0 7px 18px #0008;touch-action:none}
     #v5out .city70-canvas{display:block;width:100%;height:100%;image-rendering:auto;touch-action:none}
     #v5out .city70-view-label{position:absolute;top:8px;left:9px;padding:5px 8px;border-radius:6px;background:#07151dcc;color:#c7faff;font-size:11px;pointer-events:none}
+    #v5out .city70-fullscreen-btn{position:absolute;z-index:5;top:7px;right:7px;min-height:35px;max-width:46%;padding:5px 10px;border:1px solid #6a9ca5;border-radius:8px;background:#08242de8;color:#e1ffff;font-size:13px;font-weight:800;cursor:pointer;touch-action:manipulation}
+    #v5out .city70-interact-hint{position:absolute;left:9px;bottom:8px;z-index:2;padding:5px 7px;border-radius:6px;background:#07151dd8;color:#d2ffff;font-size:11px;pointer-events:none}
+    body.city70-no-scroll{overflow:hidden!important}
+    #v5out .city70-wrap:fullscreen,#v5out .city70-wrap.city70-pseudo-fullscreen{box-sizing:border-box;position:fixed;inset:0;z-index:2147483646;width:100%;max-width:none;height:100dvh;min-height:100vh;margin:0;padding:8px 10px;background:#06141b;color:#e5faff;overflow:auto;display:flex;flex-direction:column;gap:3px}
+    #v5out .city70-wrap:fullscreen .city70-view,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-view{height:auto;min-height:200px;flex:1 1 240px;border-width:2px}
+    #v5out .city70-wrap:fullscreen .city70-hud,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-hud{margin:2px 0}
+    #v5out .city70-wrap:fullscreen .city70-controls,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-controls{width:100%;margin:2px auto}
+    #v5out .city70-wrap:fullscreen .city70-actions,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-actions{margin:2px 0}
+    #v5out .city70-wrap:fullscreen .city70-help,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-help{display:none}
+    #v5out .city70-wrap:fullscreen .city70-log,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-log{min-height:0;margin:2px 0;padding:5px 8px}
+    @media(orientation:landscape) and (max-height:560px){
+      #v5out .city70-wrap:fullscreen,#v5out .city70-wrap.city70-pseudo-fullscreen{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,36%);grid-template-rows:auto auto auto 1fr;gap:4px;overflow:hidden}
+      #v5out .city70-wrap:fullscreen .city70-view,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-view{grid-column:1;grid-row:1/5;height:100%;min-height:0}
+      #v5out .city70-wrap:fullscreen .city70-hud,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-hud{grid-column:2;grid-row:1;gap:2px}
+      #v5out .city70-wrap:fullscreen .city70-stat,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-stat{padding:2px;font-size:10px}
+      #v5out .city70-wrap:fullscreen .city70-stat b,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-stat b{font-size:11px;margin:0}
+      #v5out .city70-wrap:fullscreen .city70-log,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-log{grid-column:2;grid-row:2;font-size:11px}
+      #v5out .city70-wrap:fullscreen .city70-controls,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-controls{grid-column:2;grid-row:3;gap:3px;max-width:none}
+      #v5out .city70-wrap:fullscreen .city70-controls button,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-controls button{min-height:32px;padding:3px;font-size:11px}
+      #v5out .city70-wrap:fullscreen .city70-actions,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-actions{grid-column:2;grid-row:4;align-self:start;gap:3px}
+      #v5out .city70-wrap:fullscreen .city70-actions button,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-actions button{min-height:32px;padding:3px;font-size:10px}
+      #v5out .city70-wrap:fullscreen .city70-map,#v5out .city70-wrap.city70-pseudo-fullscreen .city70-map{position:absolute;top:15px;left:15px;z-index:7;max-width:260px;max-height:85%;overflow:auto}
+    }
     #v5out .city70-map{display:none;margin:8px auto;padding:8px;border:1px solid #3d6970;border-radius:9px;background:#081b24;max-width:360px}
     #v5out .city70-map.open{display:block}
     #v5out .city70-map-grid{display:grid;gap:2px;margin-top:6px}
@@ -60,6 +83,8 @@
     const view=document.createElement('div');view.className='city70-view';wrap.append(view);
     const canvas=document.createElement('canvas');canvas.className='city70-canvas';canvas.setAttribute('aria-label','Трёхмерный вид от первого лица: коридоры Древнего города');view.append(canvas);
     const label=document.createElement('div');label.className='city70-view-label';label.textContent='🎮 3D · WebGL · ДРЕВНИЙ ГОРОД';view.append(label);
+    const fullscreenBtn=document.createElement('button');fullscreenBtn.type='button';fullscreenBtn.className='city70-fullscreen-btn';fullscreenBtn.textContent='⛶ На весь экран';fullscreenBtn.setAttribute('aria-label','Включить полноэкранный режим');view.append(fullscreenBtn);
+    const interactHint=document.createElement('div');interactHint.className='city70-interact-hint';interactHint.textContent='👆 Нажми на сундук или реликвию · ПК: E';view.append(interactHint);
     const log=document.createElement('div');log.className='city70-log';log.setAttribute('aria-live','polite');log.textContent='🏛️ Ты вошёл в Древний город. Найди реликвии и вернись к порталу.';wrap.append(log);
     const controls=document.createElement('div');controls.className='city70-controls';wrap.append(controls);
     function control(text,aria,fn,cls){const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',aria);if(cls)b.className=cls;b.addEventListener('click',fn);controls.append(b);return b}
@@ -77,8 +102,8 @@
     function actionButton(text,aria,fn){const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',aria);b.addEventListener('click',fn);actions.append(b);return b}
     const lanternBtn=actionButton('🔦 Фонарь ×'+lantern,'Использовать душевный фонарь',useLantern),mapBtn=actionButton('🗺️ Карта','Показать карту города',toggleMap),diaryBtn=actionButton('📜 Дневник','Открыть дневник экспедиции',diary);
     const mapPanel=document.createElement('div');mapPanel.className='city70-map';wrap.append(mapPanel);
-    const help=document.createElement('p');help.className='city70-help';help.textContent='Движение: удерживай «Вперёд» или «Назад», для спринта — «🏃 Спринт» вместе с «Вперёд» (на ПК W + Shift). Страж проснётся через несколько секунд и будет преследовать тебя постоянно, даже если стоишь! Фонарь останавливает его на 4 секунды. Обзор: проведи пальцем по 3D-окну. На компьютере — WASD или стрелки.';wrap.append(help);
-    field.hidden=true;let cssW=360,cssH=300,dpr=1;
+    const help=document.createElement('p');help.className='city70-help';help.textContent='Сундуки и реликвии теперь нужно брать вручную: подойди и нажми на предмет в 3D-мире (на ПК можно навести взгляд и нажать E). В правом верхнем углу 3D-окна — полноэкранный режим. Движение: удерживай «Вперёд» или «Назад», спринт — «🏃 Спринт» вместе с «Вперёд» (ПК W + Shift). Страж преследует постоянно, фонарь задерживает его на 4 секунды.';wrap.append(help);
+    field.hidden=true;let cssW=360,cssH=300,dpr=1,pseudoFullscreen=false;
     const gl=canvas.getContext('webgl',{alpha:false,antialias:true,depth:true,stencil:false,powerPreference:'low-power'})||canvas.getContext('experimental-webgl',{alpha:false,antialias:true,depth:true,stencil:false});
     let glProgram=null,glBuffer=null,wardenBuffer=null,atlasTexture=null,glReady=false;
     label.textContent='🎮 3D · WebGL · ДРЕВНИЙ ГОРОД';
@@ -383,7 +408,7 @@
     let keyHandler=null,keyUpHandler=null;
     function finish(won,reason){
       if(done)return;done=true;if(cameraFrame)cancelAnimationFrame(cameraFrame);cameraFrame=0;cameraAnimation=null;queuedAction=null;cameraBob=0;window.__city70Token++;if(won){stats.wins++;saveStats(stats);rewardChallenge(34+Math.max(0,maxMoves-moves)*.18,'Древний город исследован! Ты вернулся с реликвиями.');ach('Повелитель Древнего города');ach('Тихий исследователь')}
-      if(keyHandler)document.removeEventListener('keydown',keyHandler);if(keyUpHandler)document.removeEventListener('keyup',keyUpHandler);window.removeEventListener('blur',clearHeldInput);clearHeldInput();if(wardenFrame)cancelAnimationFrame(wardenFrame);wardenFrame=0;wrap.replaceChildren();
+      if(keyHandler)document.removeEventListener('keydown',keyHandler);if(keyUpHandler)document.removeEventListener('keyup',keyUpHandler);window.removeEventListener('blur',clearHeldInput);clearHeldInput();if(wardenFrame)cancelAnimationFrame(wardenFrame);wardenFrame=0;leaveFullscreen();document.removeEventListener('fullscreenchange',onFullscreenChange);window.removeEventListener('resize',onResize);if(window.visualViewport)window.visualViewport.removeEventListener('resize',onResize);wrap.replaceChildren();
       const title=document.createElement('h3');title.textContent=won?'🏆 Экспедиция завершена!':'💔 Экспедиция окончена';wrap.append(title);
       const summary=document.createElement('p');summary.textContent=reason+' · Реликвии: '+relics.filter(r=>r.found).length+'/'+required+' · Сундуки: '+chests.filter(c=>c.opened).length+'/'+chestCount+' · Пройдено блоков: '+moves;wrap.append(summary);
       const record=document.createElement('p');record.className='city70-help';record.textContent='📜 Экспедиций: '+stats.runs+' · Побед: '+stats.wins+' · Найдено реликвий: '+stats.relics+' · Открыто сундуков: '+stats.chests;wrap.append(record);
@@ -449,11 +474,73 @@
       if(mapOpen&&now>=wardenMapRefresh){wardenMapRefresh=now+300;renderMap()}
     }
     function enterCell(){
-      const relic=relics.find(r=>!r.found&&same(r,pos));if(relic){relic.found=true;stats.relics++;saveStats(stats);setLog('✨ Найдена древняя реликвия! '+relics.filter(r=>r.found).length+'/'+required)}
-      const chest=chests.find(c=>!c.opened&&same(c,pos));if(chest){chest.opened=true;stats.chests++;saveStats(stats);const gems=6+Math.floor(Math.random()*7);changeCoins(gems);lantern++;setLog('📦 Сундук открыт! +'+gems+' 💎 и +1 заряд душевного фонаря.')}
+      // Chests and relics are collected only by a deliberate tap/click, not by walking over them.
       const sensor=sensors.find(s=>!s.triggered&&same(s,pos));if(sensor){sensor.triggered=true;noise=Math.min(7,noise+3);setLog('🔊 Скалк-сенсор сработал! Шум резко вырос.')}
       if(noise>=7&&!wardenAwake)wakeWarden(performance.now())
       if(relics.every(r=>r.found)&&same(pos,portal)){finish(true,'Ты вернулся к порталу с древними реликвиями!');return}
+    }
+    // Raycast from the actual tap position through the same perspective used by WebGL.
+    // A ray must hit the item's box, be close enough, and not pass through a wall.
+    function pickCollectible(clientX,clientY){
+      const rect=canvas.getBoundingClientRect();
+      if(!rect.width||!rect.height)return null;
+      const sx=(clientX-rect.left)/rect.width*2-1,sy=1-(clientY-rect.top)/rect.height*2;
+      if(Math.abs(sx)>1||Math.abs(sy)>1)return null;
+      const cp=Math.cos(cameraPitch),sp=Math.sin(cameraPitch),cy=Math.cos(cameraYaw),sn=Math.sin(cameraYaw);
+      const scale=Math.tan(Math.PI/4.9),aspect=canvas.width/Math.max(1,canvas.height);
+      let dx=sn*cp+cy*sx*scale*aspect-sn*sp*sy*scale;
+      let dy=sp+cp*sy*scale;
+      let dz=-cy*cp+sn*sx*scale*aspect+cy*sp*sy*scale;
+      const norm=Math.hypot(dx,dy,dz)||1;dx/=norm;dy/=norm;dz/=norm;
+      const eyeY=1.57+cameraBob;
+      function rayBox(cx,cy,cz,hx,hy,hz){
+        const lo=[cx-hx,cy-hy,cz-hz],hi=[cx+hx,cy+hy,cz+hz],orig=[cameraX,eyeY,cameraZ],dir=[dx,dy,dz];
+        let t0=0,t1=12;
+        for(let i=0;i<3;i++){
+          if(Math.abs(dir[i])<1e-7){if(orig[i]<lo[i]||orig[i]>hi[i])return null;continue}
+          let a=(lo[i]-orig[i])/dir[i],b=(hi[i]-orig[i])/dir[i];if(a>b)[a,b]=[b,a];
+          t0=Math.max(t0,a);t1=Math.min(t1,b);if(t1<t0)return null;
+        }
+        return t1>0?t0:null;
+      }
+      let nearest=null;
+      for(const relic of relics)if(!relic.found){
+        const t=rayBox(relic.x*2+1,.46,relic.y*2+1,.25,.46,.24);
+        if(t!==null&&(!nearest||t<nearest.distance))nearest={type:'relic',item:relic,distance:t};
+      }
+      for(const chest of chests)if(!chest.opened){
+        const t=rayBox(chest.x*2+1,.29,chest.y*2+1,.46,.29,.39);
+        if(t!==null&&(!nearest||t<nearest.distance))nearest={type:'chest',item:chest,distance:t};
+      }
+      if(!nearest)return null;
+      const end=Math.min(nearest.distance,12);
+      for(let t=.1;t<end;t+=.08){
+        const wx=cameraX+dx*t,wy=eyeY+dy*t,wz=cameraZ+dz*t;
+        const mx=Math.floor(wx/2),my=Math.floor(wz/2);
+        if(wy>=0&&wy<=3.15&&(!map[my]||map[my][mx]!==0))return null;
+      }
+      return nearest;
+    }
+    function interactAt(clientX,clientY){
+      if(done)return;
+      const hit=pickCollectible(clientX,clientY);
+      if(!hit)return;
+      if(hit.distance>3.35){setLog('👣 Подойди ближе, чтобы '+(hit.type==='chest'?'открыть сундук.':'взять реликвию.'));return}
+      if(hit.type==='relic'){
+        if(hit.item.found)return;
+        hit.item.found=true;stats.relics++;saveStats(stats);
+        setLog('✨ Реликвия взята! '+relics.filter(r=>r.found).length+'/'+required+'. Вернись к порталу, когда соберёшь все.');
+      }else{
+        if(hit.item.opened)return;
+        hit.item.opened=true;stats.chests++;saveStats(stats);
+        const gems=6+Math.floor(Math.random()*7);changeCoins(gems);lantern++;
+        setLog('📦 Сундук открыт! +'+gems+' 💎 и +1 заряд душевного фонаря.');
+      }
+      worldDirty=true;updateHud();if(mapOpen)renderMap();drawScene();
+      if(relics.every(r=>r.found)&&same(pos,portal))finish(true,'Ты собрал все реликвии и вернулся к порталу!');
+    }
+    function interactCenter(){
+      const r=canvas.getBoundingClientRect();interactAt(r.left+r.width/2,r.top+r.height/2);
     }
     function toggleCrouch(){if(done)return;crouching=!crouching;setLog(crouching?'🤫 Ты крадёшься. Движение не повышает шум.':'👣 Ты снова идёшь обычным шагом.');updateHud()}
     function useLantern(){if(done||!wardenAwake||wardenStun>0||lantern<=0)return;lantern--;wardenAttackAt=0;wardenStun=4;wardenStunUntil=performance.now()+4000;wardenMotion=null;noise=Math.max(0,noise-2);setLog('🔦 Душевный фонарь остановил Стража на 4 секунды! Убегай!');updateHud();drawScene()}
@@ -526,6 +613,7 @@
       const target=e.target;if(target&&(target.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)))return;
       if(KEY_ACTION[e.code]){e.preventDefault();if(!e.repeat){heldKeys.add(e.code);if(KEY_ACTION[e.code]==='sprint')syncSprintButton();startMovementLoop()}}
       else if(e.code==='Space'&&!e.repeat){e.preventDefault();toggleCrouch()}
+      else if(e.code==='KeyE'&&!e.repeat){e.preventDefault();interactCenter()}
     }
     function keyUp(e){if(KEY_ACTION[e.code]){heldKeys.delete(e.code);if(KEY_ACTION[e.code]==='sprint')syncSprintButton();e.preventDefault()}}
     keyHandler=keyDown;keyUpHandler=keyUp;document.addEventListener('keydown',keyHandler);document.addEventListener('keyup',keyUpHandler);window.addEventListener('blur',clearHeldInput);
@@ -534,8 +622,7 @@
     canvas.style.touchAction='none';canvas.style.cursor='grab';
     canvas.addEventListener('pointerdown',e=>{
       if(done||!e.isPrimary||(e.pointerType==='mouse'&&e.button!==0))return;
-      if(cameraFrame){if(cameraAnimation&&cameraAnimation.kind==='walk'){cameraX=pos.x*2+1;cameraZ=pos.y*2+1}cancelAnimationFrame(cameraFrame);cameraFrame=0;cameraAnimation=null;cameraBob=0;queuedAction=null}
-      lookDrag={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};
+      lookDrag={id:e.pointerId,startX:e.clientX,startY:e.clientY,x:e.clientX,y:e.clientY,moved:false};
       canvas.style.cursor='grabbing';
       if(canvas.setPointerCapture)try{canvas.setPointerCapture(e.pointerId)}catch(_){}
       e.preventDefault();
@@ -544,20 +631,51 @@
       if(!lookDrag||lookDrag.id!==e.pointerId||done)return;
       const dx=e.clientX-lookDrag.x,dy=e.clientY-lookDrag.y;
       lookDrag.x=e.clientX;lookDrag.y=e.clientY;
-      if(Math.abs(dx)+Math.abs(dy)<.5)return;
+      if(!lookDrag.moved&&Math.hypot(e.clientX-lookDrag.startX,e.clientY-lookDrag.startY)<8)return;
       lookDrag.moved=true;
       cameraYaw+=dx*.008;
       cameraPitch=clamp(cameraPitch-dy*.0065,-.62,.62);
-      syncFacingToView();
-      drawScene();
-      e.preventDefault();
+      syncFacingToView();drawScene();e.preventDefault();
     });
-    function endLookDrag(e){if(lookDrag&&(!e||lookDrag.id===e.pointerId)){lookDrag=null;canvas.style.cursor='grab'}}
+    function endLookDrag(e){
+      if(!lookDrag||e&&lookDrag.id!==e.pointerId)return;
+      const drag=lookDrag;lookDrag=null;canvas.style.cursor='grab';
+      if(e&&e.type==='pointerup'&&!drag.moved&&Math.hypot(e.clientX-drag.startX,e.clientY-drag.startY)<12)interactAt(e.clientX,e.clientY);
+    }
     canvas.addEventListener('pointerup',endLookDrag);
     canvas.addEventListener('pointercancel',endLookDrag);
     canvas.addEventListener('lostpointercapture',endLookDrag);
+    function isFullscreen(){return document.fullscreenElement===wrap||pseudoFullscreen}
+    function updateFullscreenButton(){
+      const active=isFullscreen();fullscreenBtn.textContent=active?'⤢ Свернуть':'⛶ На весь экран';
+      fullscreenBtn.setAttribute('aria-label',active?'Выйти из полноэкранного режима':'Включить полноэкранный режим');
+    }
+    function onFullscreenChange(){updateFullscreenButton();resize()}
+    async function toggleFullscreen(){
+      if(document.fullscreenElement===wrap){
+        try{await document.exitFullscreen()}catch(_){}
+        updateFullscreenButton();return;
+      }
+      if(pseudoFullscreen){
+        pseudoFullscreen=false;wrap.classList.remove('city70-pseudo-fullscreen');
+        document.body.classList.remove('city70-no-scroll');updateFullscreenButton();resize();return;
+      }
+      if(wrap.requestFullscreen){
+        try{await wrap.requestFullscreen();updateFullscreenButton();resize();return}catch(_){}
+      }
+      // Browsers without the Fullscreen API still get a fixed-screen game layout.
+      pseudoFullscreen=true;wrap.classList.add('city70-pseudo-fullscreen');
+      document.body.classList.add('city70-no-scroll');updateFullscreenButton();resize();
+    }
+    function leaveFullscreen(){
+      if(document.fullscreenElement===wrap&&document.exitFullscreen)document.exitFullscreen().catch(()=>{});
+      if(pseudoFullscreen){pseudoFullscreen=false;wrap.classList.remove('city70-pseudo-fullscreen');document.body.classList.remove('city70-no-scroll')}
+      updateFullscreenButton();
+    }
+    fullscreenBtn.addEventListener('click',toggleFullscreen);
+    document.addEventListener('fullscreenchange',onFullscreenChange);
     function onResize(){resize()}
-    window.addEventListener('resize',onResize);window.city70Restart=()=>{if(keyHandler)document.removeEventListener('keydown',keyHandler);if(keyUpHandler)document.removeEventListener('keyup',keyUpHandler);window.removeEventListener('blur',clearHeldInput);clearHeldInput();if(wardenFrame)cancelAnimationFrame(wardenFrame);wardenFrame=0;window.removeEventListener('resize',onResize);const b=document.querySelector('[data-v5="city"]');if(b)b.click()};
+    window.addEventListener('resize',onResize);window.city70Restart=()=>{if(keyHandler)document.removeEventListener('keydown',keyHandler);if(keyUpHandler)document.removeEventListener('keyup',keyUpHandler);window.removeEventListener('blur',clearHeldInput);clearHeldInput();if(wardenFrame)cancelAnimationFrame(wardenFrame);wardenFrame=0;leaveFullscreen();document.removeEventListener('fullscreenchange',onFullscreenChange);window.removeEventListener('resize',onResize);if(window.visualViewport)window.visualViewport.removeEventListener('resize',onResize);const b=document.querySelector('[data-v5="city"]');if(b)b.click()};
     if(window.visualViewport)window.visualViewport.addEventListener('resize',onResize);
     resize();updateHud();drawScene();startWardenLoop();
   };
