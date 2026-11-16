@@ -42,7 +42,7 @@
     const size=difficulty==='easy'?9:difficulty==='hard'?13:11,maxMoves=difficulty==='easy'?150:difficulty==='hard'?230:190,maxHealth=difficulty==='easy'?5:3,required=difficulty==='hard'?4:3;
     const map=makeMaze(size),start={x:1,y:1},portal={x:1,y:1},pos={x:1,y:1};let facing=DIRS.findIndex(([dx,dy])=>!!(map[start.y+dy]&&map[start.y+dy][start.x+dx]===0));if(facing<0)facing=1;
     const reachable=[];for(let y=1;y<size-1;y++)for(let x=1;x<size-1;x++)if(map[y][x]===0&&!(x===1&&y===1))reachable.push({x,y});shuffle(reachable);
-    const relics=reachable.splice(0,required).map(p=>({...p,found:false})),chestCount=difficulty==='easy'?3:difficulty==='hard'?5:4,chests=reachable.splice(0,chestCount).map(p=>({...p,opened:false})),sensorCount=difficulty==='easy'?3:difficulty==='hard'?7:5,sensors=reachable.splice(0,sensorCount).map(p=>({...p,triggered:false})),woolCount=difficulty==='hard'?2:3,wool=reachable.splice(0,woolCount),wardenSpawn={...(reachable.pop()||{x:size-2,y:size-2})};let warden={...wardenSpawn};
+    const relics=reachable.splice(0,required).map(p=>({...p,found:false})),chestCount=difficulty==='easy'?3:difficulty==='hard'?5:4,chests=reachable.splice(0,chestCount).map(p=>({...p,opened:false})),sensorCount=difficulty==='easy'?3:difficulty==='hard'?7:5,sensors=reachable.splice(0,sensorCount).map(p=>({...p,triggered:false})),woolCount=difficulty==='hard'?2:3,wool=reachable.splice(0,woolCount),spawnDistances=distanceMap(map,start);reachable.sort((a,b)=>(spawnDistances.get(b.x+','+b.y)||0)-(spawnDistances.get(a.x+','+a.y)||0));const wardenSpawn={...(reachable.shift()||{x:size-2,y:size-2})};let warden={...wardenSpawn};
     const stats=readStats();stats.runs++;saveStats(stats);let moves=0,health=maxHealth,lantern=difficulty==='hard'?2:3,noise=0,wardenAwake=false,wardenStun=0,wardenStep=0,done=false,crouching=false,mapOpen=false;
     const wrap=document.createElement('div');wrap.className='city70-wrap';out.append(wrap);
     const hudBox=document.createElement('div');hudBox.className='city70-hud';wrap.append(hudBox);
@@ -71,57 +71,51 @@
       return sh;
     }
     function makeAtlas(){
-      // Four Minecraft-style block textures, each authored on an exact 16x16 pixel grid.
-      const atlas=document.createElement('canvas');atlas.width=64;atlas.height=16;
+      // Six exact 32x32 pixel-art tiles: four Ancient City blocks and two dedicated Warden skins.
+      const T=32,atlas=document.createElement('canvas');atlas.width=192;atlas.height=32;
       const c=atlas.getContext('2d');c.imageSmoothingEnabled=false;
-      const px=(tile,x,y,color)=>{c.fillStyle=color;c.fillRect(tile*16+x,y,1,1)};
-      const rect=(tile,x,y,w,h,color)=>{c.fillStyle=color;c.fillRect(tile*16+x,y,w,h)};
-      // 0 — deepslate bricks: offset 8x4 brick courses and dark mortar.
-      rect(0,0,0,16,16,'#202c32');
-      for(let row=0;row<4;row++){
+      const px=(tile,x,y,color)=>{c.fillStyle=color;c.fillRect(tile*T+x,y,1,1)};
+      const rect=(tile,x,y,w,h,color)=>{c.fillStyle=color;c.fillRect(tile*T+x,y,w,h)};
+      const noise=(tile,base,colors,seed,rate)=>{rect(tile,0,0,T,T,base);for(let y=0;y<T;y++)for(let x=0;x<T;x++){const n=(x*37+y*19+x*y*11+seed)%rate;if(n<colors.length)px(tile,x,y,colors[n])}};
+      // 0: deepslate bricks — staggered 8x4 courses with hand-pixelled bevels.
+      rect(0,0,0,T,T,'#202c32');
+      for(let row=0;row<8;row++){
         const y=row*4,offset=row%2?0:4;
-        rect(0,0,y,16,1,'#111b21');
-        for(let col=0;col<2;col++){
+        rect(0,0,y,T,1,'#111b21');
+        for(let col=0;col<4;col++){
           const x=col*8+offset;
-          rect(0,x,y+1,7,3,['#35464d','#2d3e45','#3a4a50','#293940'][row]);
-          rect(0,x+1,y+1,4,1,'#40535a');
-          rect(0,x,y+3,7,1,'#1b292f');
-          px(0,x+5,y+2,'#26363d');
+          rect(0,x,y+1,7,3,['#35464d','#2d3e45','#3a4a50','#293940'][row%4]);
+          rect(0,x+1,y+1,4,1,'#40535a');rect(0,x,y+3,7,1,'#1b292f');
+          px(0,x+5,y+2,'#26363d');px(0,x+6,y+1,'#465960');
         }
-        rect(0,0,y+1,1,3,'#111b21');
-        if(offset===0)rect(0,8,y+1,1,3,'#111b21');
+        rect(0,0,y+1,1,3,'#111b21');if(offset===0)rect(0,16,y+1,1,3,'#111b21');
       }
-      // 1 — polished deepslate: calm dark stone with sparse mineral flecks.
-      rect(1,0,0,16,16,'#303f46');
-      for(let y=0;y<16;y++)for(let x=0;x<16;x++){
-        const n=(x*17+y*29+x*y*3)%31;
-        if(n===0||n===7)px(1,x,y,'#405158');
-        else if(n===3||n===19)px(1,x,y,'#29383f');
-        else if(n===12)px(1,x,y,'#36474e');
-      }
-      rect(1,2,2,5,1,'#3b4d54');rect(1,3,3,3,1,'#35464d');
-      rect(1,10,11,4,1,'#27373e');px(1,12,12,'#405158');
-      // 2 — chiseled deepslate: inset square tiles and beveled pixel edges.
-      rect(2,0,0,16,16,'#1c2a30');
-      rect(2,1,1,14,14,'#34454c');rect(2,2,2,12,12,'#2d3e45');
-      rect(2,3,3,10,1,'#485a60');rect(2,3,4,1,8,'#405259');
-      rect(2,4,12,9,1,'#1b292f');rect(2,13,4,1,8,'#19272d');
-      rect(2,5,5,6,6,'#26373e');rect(2,6,6,4,4,'#304249');
-      px(2,7,7,'#40565c');px(2,8,8,'#1b3036');
-      // 3 — sculk: deep teal base, pixel veins and bright cyan growth.
-      rect(3,0,0,16,16,'#09272d');
-      for(let y=0;y<16;y++)for(let x=0;x<16;x++){
-        const n=(x*37+y*19+x*y*11+13)%47;
-        if(n<5)px(3,x,y,'#103a40');
-        else if(n===8||n===21)px(3,x,y,'#16484b');
-        else if(n===30)px(3,x,y,'#0d3137');
-      }
-      const veins=[[2,3],[3,4],[4,5],[5,6],[6,7],[10,2],[10,3],[9,4],[8,5],[12,10],[11,11],[10,12],[4,12],[5,11],[6,10]];
+      // 1: polished deepslate — subtle cloudy mineral grain and a few pale flecks.
+      noise(1,'#303f46',['#35474e','#293940','#40545b','#2c3c43'],17,41);
+      for(let i=0;i<18;i++){const x=(i*13+3)%30,y=(i*19+5)%30;px(1,x,y,'#53656b');if(i%3===0)px(1,x+1,y,'#3d5057')}
+      rect(1,4,5,8,1,'#3c5057');rect(1,5,6,5,1,'#35474e');rect(1,19,22,8,1,'#26373e');
+      // 2: chiseled deepslate — framed inset panel, beveled in 1px steps.
+      rect(2,0,0,T,T,'#1b292f');rect(2,1,1,30,30,'#34464d');rect(2,2,2,28,28,'#2b3c43');
+      rect(2,3,3,26,2,'#4b5e65');rect(2,3,5,2,22,'#40545b');rect(2,5,27,22,2,'#18262c');rect(2,27,5,2,22,'#17252b');
+      rect(2,7,8,18,16,'#26383f');rect(2,9,10,14,12,'#30434a');rect(2,11,12,10,8,'#293b42');
+      for(let i=0;i<8;i++)px(2,8+i*2,9+(i%3),'#465a61');
+      // 3: sculk — dark teal cellular pattern, branching veins and cyan nodes.
+      noise(3,'#09272d',['#103a40','#16484b','#0d3137','#0b3036','#124047'],13,37);
+      const veins=[[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[10,11],[11,12],[12,13],[22,3],[21,4],[20,5],[19,6],[18,7],[17,8],[16,9],[15,10],[14,11],[13,12],[5,25],[6,24],[7,23],[8,22],[9,21],[24,23],[23,22],[22,21],[21,20]];
       for(const [x,y] of veins)px(3,x,y,'#17615e');
-      for(const [x,y] of [[3,4],[5,6],[9,4],[11,11],[5,11],[13,7],[7,2]]){
-        px(3,x,y,'#238b83');px(3,x+1,y,'#15534f');px(3,x,y+1,'#10433f');
+      for(const [x,y] of [[4,5],[8,9],[20,5],[16,9],[7,23],[22,21],[13,12],[25,12],[11,27]]){
+        rect(3,x,y,2,2,'#238b83');px(3,x,y,'#79e8d7');px(3,x+1,y+1,'#15534f');
       }
-      for(const [x,y] of [[3,4],[9,4],[11,11],[5,11]])px(3,x,y,'#79e8d7');
+      // 4: Warden hide — dark blue-black hide with pixel mottling and cyan rib markings.
+      noise(4,'#101e27',['#142b34','#1b3540','#0c1821','#203a43','#12242e'],29,43);
+      for(let y=4;y<29;y+=5){rect(4,5,y,22,1,'#294650');rect(4,7,y+1,18,1,'#172d37')}
+      for(const [x,y] of [[5,7],[8,10],[23,8],[26,12],[7,22],[24,24],[14,4],[18,27]]){px(4,x,y,'#3b5960');px(4,x+1,y,'#203d46')}
+      // 5: Warden chest/head accents — layered sculk core, turquoise ribs and cyan highlights.
+      rect(5,0,0,T,T,'#102a32');rect(5,2,2,28,28,'#173943');rect(5,4,4,24,24,'#0d252d');
+      rect(5,7,6,18,20,'#15515a');rect(5,9,8,14,16,'#1c6970');rect(5,11,10,10,12,'#0b343d');
+      for(let y=7;y<26;y+=4){rect(5,5,y,22,1,'#267b7b');rect(5,7,y+1,18,1,'#123f49')}
+      rect(5,13,11,6,10,'#1b7777');rect(5,14,12,4,8,'#39b5ad');rect(5,15,13,2,6,'#79e8d7');
+      for(const [x,y] of [[8,7],[23,7],[7,24],[24,24],[12,5],[19,26]])px(5,x,y,'#8bf5e7');
       return atlas;
     }
     function initGL(){
@@ -148,21 +142,61 @@
     function matMultiply(a,b){const o=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];return o}
     function resize(){const r=view.getBoundingClientRect();cssW=Math.max(280,Math.floor(r.width||360));cssH=Math.max(250,Math.floor(r.height||300));dpr=Math.min(2,Math.max(1,window.devicePixelRatio||1));canvas.width=Math.floor(cssW*dpr);canvas.height=Math.floor(cssH*dpr);canvas.style.width='100%';canvas.style.height='100%';if(glReady){gl.viewport(0,0,canvas.width,canvas.height);drawScene()}}
     function addCube(out,cx,cy,cz,sx,sy,sz,type,tint,yaw,rz){
-      const tile=type===0||type===1||type===2||type===3?type:0,u0=(tile*16+.5)/64,u1=((tile+1)*16-.5)/64,v0=.5/16,v1=15.5/16;
+      const tile=Number.isInteger(type)&&type>=0&&type<=5?type:0,u0=(tile*32+.5)/192,u1=((tile+1)*32-.5)/192,v0=.5/32,v1=31.5/32;
       const faces=[{p:[[-.5,-.5,-.5],[.5,-.5,-.5],[.5,.5,-.5],[-.5,.5,-.5]],l:.88},{p:[[.5,-.5,.5],[-.5,-.5,.5],[-.5,.5,.5],[.5,.5,.5]],l:.68},{p:[[-.5,.5,-.5],[.5,.5,-.5],[.5,.5,.5],[-.5,.5,.5]],l:1.18},{p:[[-.5,-.5,.5],[.5,-.5,.5],[.5,-.5,-.5],[-.5,-.5,-.5]],l:.48},{p:[[-.5,-.5,.5],[-.5,-.5,-.5],[-.5,.5,-.5],[-.5,.5,.5]],l:.76},{p:[[.5,-.5,-.5],[.5,-.5,.5],[.5,.5,.5],[.5,.5,-.5]],l:.98}],uv=[[u0,v0],[u1,v0],[u1,v1],[u0,v1]],order=[0,1,2,0,2,3],co=Math.cos(yaw||0),si=Math.sin(yaw||0),cr=Math.cos(rz||0),sr=Math.sin(rz||0),base=tint||[1,1,1];
       for(const face of faces)for(const idx of order){const p=face.p[idx];let x=p[0]*sx,y=p[1]*sy,z=p[2]*sz;const rx=x*cr-y*sr,ry=x*sr+y*cr,wx=cx+rx*co+z*si,wz=cz-rx*si+z*co,t=uv[idx];out.push(wx,cy+ry,wz,t[0],t[1],base[0]*face.l,base[1]*face.l,base[2]*face.l)}
     }
     function drawWarden3D(add,x,z){
-      const yaw=Math.atan2(pos.x*2+1-x,-(pos.y*2+1-z)),part=(lx,y,lz,sx,sy,sz,type,tint,rz)=>{const wx=x+lx*Math.cos(yaw)+lz*Math.sin(yaw),wz=z-lx*Math.sin(yaw)+lz*Math.cos(yaw);add(wx,y,wz,sx,sy,sz,type,tint,yaw,rz||0)};
-      const dark=[.72,.9,.92],mid=[.82,1,1],rib=[.48,1,1],glow=wardenAwake?[.25,1,1]:[.2,.58,.58];
-      part(-.22,.43,0,.3,.82,.38,0,dark);part(.22,.43,0,.3,.82,.38,0,dark);part(-.22,.16,-.08,.38,.2,.52,1,mid);part(.22,.16,-.08,.38,.2,.52,1,mid);
-      part(-.58,1.16,0,.28,.88,.38,0,dark,-.06);part(.58,1.16,0,.28,.88,.38,0,dark,.06);part(-.61,.55,-.02,.32,.34,.4,0,mid);part(.61,.55,-.02,.32,.34,.4,0,mid);
-      part(0,1.18,0,.88,1.05,.48,0,dark);part(0,1.23,-.025,.78,.91,.5,1,mid);
-      for(let i=0;i<4;i++){const yy=.94+i*.17;part(-.16,yy,-.274,.3,.055,.045,3,rib);part(.16,yy,-.274,.3,.055,.045,3,rib)}
-      part(0,1.25,-.31,.24,.36,.09,3,glow);part(0,1.31,-.365,.09,.13,.035,3,[.8,1,1]);
-      part(0,2.0,0,.58,.55,.48,0,dark);part(0,2.02,-.025,.5,.46,.46,1,mid);part(-.13,2.04,-.27,.09,.055,.045,3,[.75,1,1]);part(.13,2.04,-.27,.09,.055,.045,3,[.75,1,1]);
-      part(-.39,2.28,0,.16,.54,.16,0,dark,-.42);part(.39,2.28,0,.16,.54,.16,0,dark,.42);part(-.48,2.48,-.01,.13,.2,.14,1,mid,-.18);part(.48,2.48,-.01,.13,.2,.14,1,mid,.18);
-      part(-.32,1.55,-.03,.12,.22,.14,3,rib);part(.32,1.55,-.03,.12,.22,.14,3,rib);
+      const yaw=Math.atan2(pos.x*2+1-x,-(pos.y*2+1-z));
+      const part=(lx,y,lz,sx,sy,sz,type,tint,rz)=>{const wx=x+lx*Math.cos(yaw)+lz*Math.sin(yaw),wz=z-lx*Math.sin(yaw)+lz*Math.cos(yaw);add(wx,y,wz,sx,sy,sz,type,tint,yaw,rz||0)};
+      const hide=[.92,1,1],hideShade=[.68,.84,.9],chest=[.88,1,1],rib=[.45,1,1],glow=wardenAwake?[.42,1,1]:[.14,.42,.48];
+      const breathe=Math.sin(Date.now()/(wardenAwake?250:900))*(wardenAwake?.025:.012);
+      if(!wardenAwake){
+        // Sleeping Warden: a low horizontal silhouette, head resting on one side.
+        part(-.05,.43,0,1.12,.48,.66,4,hide,-.03);
+        part(.68,.48,-.02,.68,.58,.62,4,hideShade);
+        part(.98,.68,-.03,.2,.46,.22,4,hide,-.34);
+        part(1.12,.84,-.03,.16,.16,.18,4,hideShade,-.18);
+        part(-.72,.32,.12,.42,.34,.48,4,hide,-.16);
+        part(-.68,.28,-.28,.42,.3,.34,4,hideShade,.12);
+        part(-.28,.19,-.02,.3,.2,.4,4,hideShade);
+        part(.18,.18,.18,.3,.2,.36,4,hideShade);
+        part(.43,.5,-.345,.34,.3,.06,5,chest);
+        part(.43,.5,-.39,.2,.2,.035,3,glow);
+        part(.76,.53,-.34,.07,.07,.035,3,[.38,.95,1]);
+        return;
+      }
+      // Standing Warden: broad torso, thick legs, long arms, large head and swept horns.
+      part(-.32,.48,0,.44,.9,.5,4,hideShade);
+      part(.32,.48,0,.44,.9,.5,4,hideShade);
+      part(-.32,.1,-.045,.5,.2,.62,4,hide);
+      part(.32,.1,-.045,.5,.2,.62,4,hide);
+      part(0,1.28+breathe,0,1.18,1.22,.68,4,hide);
+      part(0,1.31+breathe,-.035,.96,1.02,.7,5,chest);
+      part(-.72,1.26,0,.42,1.38,.54,4,hideShade,-.035);
+      part(.72,1.26,0,.42,1.38,.54,4,hideShade,.035);
+      part(-.76,.55,-.04,.48,.34,.52,4,hide);
+      part(.76,.55,-.04,.48,.34,.52,4,hide);
+      // Four broad ribs frame the glowing chest core.
+      for(let i=0;i<4;i++){
+        const yy=1.02+i*.17;
+        part(-.2,yy,-.39,.28,.065,.045,3,rib);
+        part(.2,yy,-.39,.28,.065,.045,3,rib);
+      }
+      part(0,1.31+breathe,-.405,.34,.47,.08,5,chest);
+      part(0,1.34+breathe,-.455,.19,.29,.045,3,glow);
+      part(0,1.38+breathe,-.49,.075,.13,.025,3,[.82,1,1]);
+      // Broad square head, glowing eyes and unmistakable swept-back horns.
+      part(0,2.28+breathe,0,.9,.78,.72,4,hide);
+      part(0,2.29+breathe,-.035,.78,.66,.72,5,chest);
+      part(-.2,2.31+breathe,-.405,.13,.09,.035,3,[.45,1,1]);
+      part(.2,2.31+breathe,-.405,.13,.09,.035,3,[.45,1,1]);
+      part(-.62,2.55,0,.24,.68,.3,4,hide,-.43);
+      part(.62,2.55,0,.24,.68,.3,4,hide,.43);
+      part(-.79,2.82,.02,.2,.2,.24,5,chest,-.2);
+      part(.79,2.82,.02,.2,.2,.24,5,chest,.2);
+      part(-.34,1.68,-.02,.15,.24,.18,3,rib);
+      part(.34,1.68,-.02,.15,.24,.18,3,rib);
     }
     function buildWorld(){
       const verts=[],add=(...a)=>addCube(verts,...a),worldX=x=>x*2+1,worldZ=y=>y*2+1;
