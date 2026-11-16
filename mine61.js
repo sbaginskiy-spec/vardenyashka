@@ -74,6 +74,51 @@
   function writeCollection(data) {try {localStorage.setItem(STORAGE,JSON.stringify(data));} catch (_) {}}
   function shuffle(arr) {for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}return arr;}
 
+
+  // Отдельная мастерская: доступна до начала шахты и после любого похода.
+  window.openMineWorkshop = function({field,out,clear,btn,mine,ach}) {
+    clear();
+    function render() {
+      out.replaceChildren();
+      const title=document.createElement('h3');title.textContent='🛠️ Мастерская шахтёра';out.append(title);
+      const data=readCollection();
+      const summary=document.createElement('p');summary.className='mine61-hint';
+      summary.textContent='⛏️ Руды: '+ORES.map(o=>o.icon+' '+o.name+' ×'+(data.ores[o.id]||0)).join(' · ');
+      out.append(summary);
+      const trophies=document.createElement('p');trophies.className='mine61-hint';
+      trophies.textContent='🧟 Трофеи: '+DROPS.map(d=>d.icon+' '+d.name+' ×'+(data.drops[d.id]||0)).join(' · ');
+      out.append(trophies);
+      const inv=document.createElement('div');inv.className='mine61-collection';
+      const invTitle=document.createElement('strong');invTitle.textContent='🎒 Готовые предметы';inv.append(invTitle);
+      const invGrid=document.createElement('div');invGrid.className='mine61-collection-grid';
+      RECIPES.forEach(r=>{const el=document.createElement('span');el.textContent=r.icon+' '+r.name+' ×'+(data.items[r.id]||0);invGrid.append(el)});
+      inv.append(invGrid);out.append(inv);
+      RECIPES.forEach(recipe=>{
+        const row=document.createElement('div');row.className='mine61-collection mine61-recipe';
+        const info=document.createElement('div');
+        const name=document.createElement('strong');name.textContent=recipe.icon+' '+recipe.name;
+        const desc=document.createElement('p');desc.className='mine61-hint';desc.textContent=recipe.desc+' · Рецепт: '+Object.entries(recipe.cost).map(([id,n])=>{const item=DROPS.find(d=>d.id===id)||ORES.find(o=>o.id===id);return (item?item.icon+' '+item.name:id)+' ×'+n}).join(' + ');
+        info.append(name,desc);
+        const make=document.createElement('button');make.type='button';make.textContent='Создать';
+        make.disabled=Object.entries(recipe.cost).some(([id,n])=>(data.drops[id]??data.ores[id]??0)<n);
+        make.onclick=()=>{
+          const fresh=readCollection();
+          if(Object.entries(recipe.cost).some(([id,n])=>(fresh.drops[id]??fresh.ores[id]??0)<n)){render();return;}
+          for(const [id,n] of Object.entries(recipe.cost)){if(fresh.drops[id]!==undefined)fresh.drops[id]-=n;else fresh.ores[id]-=n;}
+          fresh.items[recipe.id]=(fresh.items[recipe.id]||0)+1;
+          fresh.crafted[recipe.id]=(fresh.crafted[recipe.id]||0)+1;
+          writeCollection(fresh);if(ach)ach('Мастер шахты');render();
+        };
+        row.append(info,make);out.append(row);
+      });
+      const note=document.createElement('p');note.className='mine61-hint';
+      note.textContent='🧪 Зелье лечит в шахте · 💣 Бомба и 🕸️ сеть помогают в бою · ⛏️ Кирка и 🛡️ броня усиливают следующий поход.';
+      out.append(note);
+      if(btn&&mine)btn('⛏️ Вернуться к шахте',mine);
+    }
+    render();
+  };
+
   window.startMine61 = function({difficulty,begin,isCurrent,field,out,rewardChallenge,ach,btn,mine}) {
     const token = begin();
     const settings = difficulty==='easy'?{cols:5,ore:12,mobs:3,lava:2,chests:2,goal:6,hp:15,torches:3,shields:4}:
