@@ -72,7 +72,7 @@
     }
     function makeAtlas(){
       // Six 32x32 nearest-neighbour pixel-art tiles.
-      const T=32,atlas=document.createElement('canvas');atlas.width=192;atlas.height=32;
+      const T=32,atlas=document.createElement('canvas');atlas.width=256;atlas.height=32;
       const c=atlas.getContext('2d');c.imageSmoothingEnabled=false;
       const px=(tile,x,y,color)=>{c.fillStyle=color;c.fillRect(tile*T+x,y,1,1)};
       const rect=(tile,x,y,w,h,color)=>{c.fillStyle=color;c.fillRect(tile*T+x,y,w,h)};
@@ -109,6 +109,13 @@
       rect(5,11,7,10,18,'#155b61');rect(5,12,8,8,16,'#218b89');rect(5,14,9,4,14,'#4bc9bd');
       rect(5,15,10,2,12,'#8bf5e7');rect(5,13,8,6,2,'#68e2d3');rect(5,13,23,6,2,'#176c70');
       px(5,12,7,'#69e4d6');px(5,19,7,'#69e4d6');px(5,12,24,'#176c70');px(5,19,24,'#176c70');
+      // 6: pale muted sage-grey rib plates, as on the original Warden.
+      noise(6,'#788879',['#8e9883','#9da18a','#657b78','#526b6c','#a5a58c','#71847c'],7,31);
+      for(let y=2;y<30;y+=5){rect(6,2,y,28,1,'#4e6668');rect(6,3,y+1,26,2,'#929984');rect(6,4,y+3,24,1,'#667a75')}
+      for(const [x,y] of [[5,4],[9,9],[14,3],[21,7],[26,13],[7,21],[18,25],[25,27],[12,16],[29,4]])px(6,x,y,'#b0ae91');
+      // 7: deep blue-black hide for the body, contrasting with teal horns and pale ribs.
+      noise(7,'#101923',['#14232e','#0b151e','#182b36','#0e1d28','#1c3039','#101b25','#203540'],19,43);
+      for(const [x,y] of [[3,5],[4,6],[5,7],[24,4],[25,5],[26,6],[8,22],[9,23],[22,24],[23,25],[14,3],[17,28]]){px(7,x,y,'#263e47');if(x<29)px(7,x+1,y,'#152631')}
       return atlas;
     }
     function initGL(){
@@ -135,56 +142,61 @@
     function matMultiply(a,b){const o=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];return o}
     function resize(){const r=view.getBoundingClientRect();cssW=Math.max(280,Math.floor(r.width||360));cssH=Math.max(250,Math.floor(r.height||300));dpr=Math.min(2,Math.max(1,window.devicePixelRatio||1));canvas.width=Math.floor(cssW*dpr);canvas.height=Math.floor(cssH*dpr);canvas.style.width='100%';canvas.style.height='100%';if(glReady){gl.viewport(0,0,canvas.width,canvas.height);drawScene()}}
     function addCube(out,cx,cy,cz,sx,sy,sz,type,tint,yaw,rz){
-      const tile=Number.isInteger(type)&&type>=0&&type<=5?type:0,u0=(tile*32+.5)/192,u1=((tile+1)*32-.5)/192,v0=.5/32,v1=31.5/32;
+      const tile=Number.isInteger(type)&&type>=0&&type<=7?type:0,u0=(tile*32+.5)/256,u1=((tile+1)*32-.5)/256,v0=.5/32,v1=31.5/32;
       const faces=[{p:[[-.5,-.5,-.5],[.5,-.5,-.5],[.5,.5,-.5],[-.5,.5,-.5]],l:.88},{p:[[.5,-.5,.5],[-.5,-.5,.5],[-.5,.5,.5],[.5,.5,.5]],l:.68},{p:[[-.5,.5,-.5],[.5,.5,-.5],[.5,.5,.5],[-.5,.5,.5]],l:1.18},{p:[[-.5,-.5,.5],[.5,-.5,.5],[.5,-.5,-.5],[-.5,-.5,-.5]],l:.48},{p:[[-.5,-.5,.5],[-.5,-.5,-.5],[-.5,.5,-.5],[-.5,.5,.5]],l:.76},{p:[[.5,-.5,-.5],[.5,-.5,.5],[.5,.5,.5],[.5,.5,-.5]],l:.98}],uv=[[u0,v0],[u1,v0],[u1,v1],[u0,v1]],order=[0,1,2,0,2,3],co=Math.cos(yaw||0),si=Math.sin(yaw||0),cr=Math.cos(rz||0),sr=Math.sin(rz||0),base=tint||[1,1,1];
       for(const face of faces)for(const idx of order){const p=face.p[idx];let x=p[0]*sx,y=p[1]*sy,z=p[2]*sz;const rx=x*cr-y*sr,ry=x*sr+y*cr,wx=cx+rx*co+z*si,wz=cz-rx*si+z*co,t=uv[idx];out.push(wx,cy+ry,wz,t[0],t[1],base[0]*face.l,base[1]*face.l,base[2]*face.l)}
     }
     function drawWarden3D(add,x,z){
       const yaw=Math.atan2(pos.x*2+1-x,-(pos.y*2+1-z));
       const part=(lx,y,lz,sx,sy,sz,type,tint,rz)=>{const wx=x+lx*Math.cos(yaw)+lz*Math.sin(yaw),wz=z-lx*Math.sin(yaw)+lz*Math.cos(yaw);add(wx,y,wz,sx,sy,sz,type,tint,yaw,rz||0)};
-      const skin=[.96,1.06,.92],shade=[.78,.94,.82],sculk=[.52,.88,.78],cyan=wardenAwake?[.62,1,1]:[.2,.55,.52];
+      const dark=[1,1,1],teal=[1.08,1.12,1.04],rib=[1,1,1],sculk=[.65,.92,.9],cyan=wardenAwake?[.72,1,1]:[.22,.58,.58];
       const breathe=Math.sin(Date.now()/(wardenAwake?270:950))*(wardenAwake?.018:.008);
       if(!wardenAwake){
-        // Quiet, low silhouette: the Warden is dormant beneath the sculk.
-        part(0,.28,0,1.08,.34,.68,4,shade);
-        part(0,.42,-.08,.78,.34,.55,4,skin);
-        part(.52,.48,-.02,.42,.25,.42,4,shade,-.12);
-        part(-.52,.48,-.02,.42,.25,.42,4,shade,.12);
+        part(0,.28,0,1.08,.34,.68,7,dark);
+        part(0,.42,-.08,.78,.34,.55,7,dark);
+        part(.52,.48,-.02,.42,.25,.42,7,dark,-.12);
+        part(-.52,.48,-.02,.42,.25,.42,7,dark,.12);
         part(0,.47,-.37,.22,.25,.035,5,cyan);
         return;
       }
-      // Minecraft-like silhouette: square head, broad torso, long arms and short sturdy legs.
-      // Legs and feet.
-      part(-.29,.48,.015,.43,.86,.58,4,shade);
-      part(.29,.48,.015,.43,.86,.58,4,shade);
-      part(-.29,.09,-.10,.48,.18,.72,4,skin);
-      part(.29,.09,-.10,.48,.18,.72,4,skin);
-      // Torso: one broad, simple cuboid rather than layered mechanical armour.
-      part(0,1.38+breathe,0,1.16,1.28,.72,4,skin);
-      // Long rectangular arms and blocky hands.
-      part(-.76,1.27,0,.38,1.34,.58,4,shade,-.025);
-      part(.76,1.27,0,.38,1.34,.58,4,shade,.025);
-      part(-.77,.52,-.04,.4,.36,.54,4,skin);
-      part(.77,.52,-.04,.4,.36,.54,4,skin);
-      // Broad square head with two tiny cyan eyes.
-      part(0,2.34+breathe,0,.88,.78,.7,4,skin);
+      // Deep blue-black body, teal crown and horns, pale rib-like plates.
+      // Short sturdy legs and blocky feet.
+      part(-.29,.48,.015,.43,.86,.58,7,dark);
+      part(.29,.48,.015,.43,.86,.58,7,dark);
+      part(-.29,.09,-.10,.48,.18,.72,7,dark);
+      part(.29,.09,-.10,.48,.18,.72,7,dark);
+      // Muted pale ankle markings.
+      part(-.29,.22,-.405,.29,.085,.035,6,rib);
+      part(.29,.22,-.405,.29,.085,.035,6,rib);
+      // Main torso and broad shoulders.
+      part(0,1.38+breathe,0,1.16,1.28,.72,7,dark);
+      // Long rectangular arms with the characteristic light outer rib panels.
+      part(-.76,1.27,0,.38,1.34,.58,7,dark,-.025);
+      part(.76,1.27,0,.38,1.34,.58,7,dark,.025);
+      part(-.77,.52,-.04,.4,.36,.54,7,dark);
+      part(.77,.52,-.04,.4,.36,.54,7,dark);
+      part(-.76,1.22,-.302,.245,.83,.045,6,rib,-.035);
+      part(.76,1.22,-.302,.245,.83,.045,6,rib,.035);
+      // Square dark head with a teal pixelated crown.
+      part(0,2.34+breathe,0,.88,.78,.7,7,dark);
+      part(0,2.744+breathe,0,.9,.045,.72,4,teal);
       part(-.19,2.37+breathe,-.365,.12,.075,.035,3,[.48,1,1]);
       part(.19,2.37+breathe,-.365,.12,.075,.035,3,[.48,1,1]);
-      // Two swept, stepped horns. Their block segments make the classic Warden outline.
-      part(-.43,2.63,.015,.23,.34,.28,4,shade,-.16);
-      part(-.58,2.79,.015,.22,.34,.26,4,skin,-.38);
-      part(-.73,2.91,.015,.2,.22,.24,4,shade,-.58);
-      part(.43,2.63,.015,.23,.34,.28,4,shade,.16);
-      part(.58,2.79,.015,.22,.34,.26,4,skin,.38);
-      part(.73,2.91,.015,.2,.22,.24,4,shade,.58);
-      // Sparse cyan rib marks and a small bright soul core on the chest.
+      // Broad, stepped turquoise horns.
+      part(-.43,2.63,.015,.23,.34,.28,4,teal,-.16);
+      part(-.58,2.79,.015,.22,.34,.26,4,teal,-.38);
+      part(-.73,2.91,.015,.2,.22,.24,4,teal,-.58);
+      part(.43,2.63,.015,.23,.34,.28,4,teal,.16);
+      part(.58,2.79,.015,.22,.34,.26,4,teal,.38);
+      part(.73,2.91,.015,.2,.22,.24,4,teal,.58);
+      // Three pairs of pale rib plates around the cyan soul core.
       for(let i=0;i<3;i++){
-        const yy=1.12+i*.19;
-        part(-.22,yy,-.37,.23,.045,.035,3,sculk);
-        part(.22,yy,-.37,.23,.045,.035,3,sculk);
+        const yy=1.08+i*.2;
+        part(-.285,yy,-.382,.36,.075,.045,6,rib,-.13);
+        part(.285,yy,-.382,.36,.075,.045,6,rib,.13);
       }
-      part(0,1.39+breathe,-.39,.23,.3,.055,5,cyan);
-      part(0,1.4+breathe,-.425,.09,.16,.025,3,[.78,1,1]);
+      part(0,1.39+breathe,-.415,.23,.3,.06,5,cyan);
+      part(0,1.4+breathe,-.452,.09,.16,.025,3,[.78,1,1]);
     }
     function buildWorld(){
       const verts=[],add=(...a)=>addCube(verts,...a),worldX=x=>x*2+1,worldZ=y=>y*2+1;
