@@ -246,7 +246,11 @@ function startMusic(d){
    flash(sequence[k++]);after(tempo,show)}after(500,show)
  }nextRound();
 }
-function mine(){chooseDifficulty('⛏️ Шахта 6.1: мобы, руды и сокровища',d=>{if(typeof window.startMine61==='function')window.startMine61({difficulty:d,begin:()=>{clear();return challengeToken},isCurrent:token=>token===challengeToken,field,out,rewardChallenge,ach,btn,mine});else startMine(d)})}
+function mine(){
+ clear();line('⛏️ Шахта: добывай руды, сражайся с мобами и создавай снаряжение.');
+ btn('⛏️ Начать шахту',()=>chooseDifficulty('⛏️ Шахта 6.1: мобы, руды и сокровища',d=>{if(typeof window.startMine61==='function')window.startMine61({difficulty:d,begin:()=>{clear();return challengeToken},isCurrent:token=>token===challengeToken,field,out,rewardChallenge,ach,btn,mine});else startMine(d)}));
+ if(typeof window.openMineWorkshop==='function')btn('🛠️ Мастерская и крафт',()=>window.openMineWorkshop({field,out,clear,btn,mine,ach}));
+}
 function startMine(d){
  clear();const token=challengeToken,size=d==='easy'?16:25,need=d==='easy'?4:d==='normal'?6:8,trapCount=d==='easy'?2:d==='normal'?5:8,maxMiss=d==='easy'?9:d==='normal'?8:7;
  const layout=Array(size).fill('rock'),shuffled=Array.from({length:size},(_,i)=>i);
@@ -336,7 +340,7 @@ function startParkour(d){
   if(steps===4)accumulator=0;draw();requestAnimationFrame(tick);
  }updateHud();draw();requestAnimationFrame(tick)
 }
-function city(){chooseDifficulty('🏛️ Древний город 6.2: найди реликвии, открывай сундуки и не разбуди Стража',d=>{if(typeof window.startCity62==='function')window.startCity62({difficulty:d,makeMaze:randomMaze,field,out,rewardChallenge,ach,btn,challengeFail,changeCoins,clear});else startCity(d)})}
+function city(){chooseDifficulty('🏛️ Древний город 6.2: найди реликвии, открывай сундуки и не разбуди Стража',d=>{try{if(typeof window.startCity62==='function')window.startCity62({difficulty:d,makeMaze:randomMaze,field,out,rewardChallenge,ach,btn,challengeFail,changeCoins,clear});else startCity(d)}catch(error){console.error('Древний город 6.2:',error);startCity(d)}})}
 function startCity(d){
  clear();const token=challengeToken,size=d==='easy'?7:d==='normal'?9:11,turns=d==='easy'?60:d==='normal'?66:70,required=3;
  let moves=turns,found=0,done=false,pos={x:1,y:1};const start={x:1,y:1};
