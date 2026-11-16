@@ -1,4 +1,4 @@
-/* Варденяшка 7.22 — open Ancient City with plazas, ruins and central gateway. */
+/* Варденяшка 7.23 — open Ancient City with plazas, ruins and central gateway. */
 (() => {
   'use strict';
   const STYLE_ID='city70-style';
@@ -90,7 +90,7 @@
     const shriekers=reachable.splice(0,difficulty==='easy'?3:5).map(p=>({...p,triggered:false}));
     const stats=readStats();stats.runs++;saveStats(stats);let moves=0,health=maxHealth,lantern=difficulty==='hard'?2:3,noise=0,wardenAwake=false,wardenStun=0,done=false,crouching=false,mapOpen=false;
     // The player moves continuously in world space; grid cells are used only for collisions and discoveries.
-    let cameraX=pos.x*2+1,cameraZ=pos.y*2+1,cameraYaw=facing*Math.PI/2,cameraPitch=0,cameraBob=0,cameraAnimation=null,cameraFrame=0,queuedAction=null,worldVerts=null,worldDirty=true;
+    let cameraX=pos.x*2+1,cameraZ=pos.y*2+1,cameraYaw=facing*Math.PI/2,cameraPitch=0,cameraBob=0,jumpHeight=0,jumpVelocity=0,cameraAnimation=null,cameraFrame=0,queuedAction=null,worldVerts=null,worldDirty=true;
     const heldKeys=new Set(),heldPointers=new Map(),KEY_ACTION={ArrowUp:'forward',KeyW:'forward',ArrowDown:'back',KeyS:'back',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ControlLeft:'sprint',ControlRight:'sprint'};
     let movementFrame=0,lastMovementTime=0,wallMessageAt=0,shiftCrouchPrevious=null;
     const PLAYER_RADIUS=.27,MOVE_SPEED=3.25,SPRINT_MULTIPLIER=1.7,TURN_SPEED=2.1;
@@ -118,6 +118,7 @@
     const blank2=document.createElement('span');blank2.className='empty';controls.append(blank2);
     const crouchBtn=control('🤫 Тихо: выкл','Включить тихий шаг',toggleCrouch);
     const blank3=document.createElement('span');blank3.className='empty';controls.append(blank3);
+    const jumpBtn=control('⬆️ Прыжок','Подпрыгнуть',()=>jump());
     bindHold(forwardBtn,'forward');bindHold(sprintBtn,'sprint');bindHold(rightBtn,'right');bindHold(leftBtn,'left');bindHold(backBtn,'back');
     const actions=document.createElement('div');actions.className='city70-actions';wrap.append(actions);
     function actionButton(text,aria,fn){const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',aria);b.addEventListener('click',fn);actions.append(b);return b}
@@ -365,6 +366,17 @@
           if((x*5+y*11)%9===0)add(cx,.34,cz-.78,.42,.68,.08,3,[.3,.72,.72],0,0);
         }
       }
+      // Broken stepped terrain: stone shelves, rubble and uneven sculk deposits.
+      for(let y=1;y<size-1;y++)for(let x=1;x<size-1;x++){
+        const cx=worldX(x),cz=worldZ(y),pattern=(x*31+y*17+x*y*3)%17;
+        if(map[y][x]===1){
+          if(pattern<8){const height=.35+(pattern%3)*.28;add(cx+.1,3.1+height/2,cz-.1,1.7,height,1.7,2,[.5,.61,.65],0,0)}
+          if(pattern===9)add(cx,3.5,cz,1.5,1,1.5,3,[.35,.75,.8],0,0);
+        }else if(Math.abs(x-portal.x)+Math.abs(y-portal.y)>5){
+          if(pattern===2||pattern===5)add(cx-.6,.11,cz+.55,.6,.22,.6,2,[.58,.68,.73],0,0);
+          if(pattern===7)add(cx+.52,.07,cz-.48,.82,.12,.7,3,[.4,.83,.84],0,0);
+        }
+      }
       // Small projecting deepslate ribs make wall faces look like built Minecraft architecture.
       for(let y=0;y<size;y++)for(let x=0;x<size;x++)if(map[y][x]===1){
         const cx=worldX(x),cz=worldZ(y);
@@ -408,6 +420,11 @@
         const dt=wardenChaseLast?Math.min(.05,Math.max(0,(now-wardenChaseLast)/1000)):0;
         wardenChaseLast=now;
         updateWardenChase(now,dt);
+        if(jumpHeight>0||jumpVelocity>0){
+          jumpVelocity-=17*dt;jumpHeight=Math.max(0,jumpHeight+jumpVelocity*dt);
+          if(jumpHeight===0)jumpVelocity=0;
+          drawScene();
+        }
         if(done){wardenFrame=0;return}
         const interval=wardenAwake?34:90;
         if(!wardenLastFrame||now-wardenLastFrame>=interval){wardenLastFrame=now;drawScene()}
@@ -416,7 +433,7 @@
       wardenFrame=requestAnimationFrame(tick);
     }
     function drawScene(){
-      if(!glReady||done)return;if(!worldVerts||worldDirty){worldVerts=buildWorld();worldDirty=false;gl.bindBuffer(gl.ARRAY_BUFFER,glBuffer);gl.bufferData(gl.ARRAY_BUFFER,worldVerts,gl.DYNAMIC_DRAW)}const yaw=cameraYaw,eye=[cameraX,1.57+cameraBob,cameraZ],target=[eye[0]+Math.sin(yaw),1.57+cameraBob,eye[2]-Math.cos(yaw)];
+      if(!glReady||done)return;if(!worldVerts||worldDirty){worldVerts=buildWorld();worldDirty=false;gl.bindBuffer(gl.ARRAY_BUFFER,glBuffer);gl.bufferData(gl.ARRAY_BUFFER,worldVerts,gl.DYNAMIC_DRAW)}const yaw=cameraYaw,eye=[cameraX,1.57+cameraBob+jumpHeight,cameraZ],target=[eye[0]+Math.sin(yaw),1.57+cameraBob,eye[2]-Math.cos(yaw)];
       const lookCos=Math.cos(cameraPitch),lookTarget=[eye[0]+Math.sin(yaw)*lookCos,eye[1]+Math.sin(cameraPitch),eye[2]-Math.cos(yaw)*lookCos],projection=matPerspective(Math.PI/2.45,canvas.width/canvas.height,.06,55),viewMatrix=matLookAt(eye,lookTarget,[0,1,0]),vp=matMultiply(projection,viewMatrix);
       gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(.012,.03,.043,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(glProgram);gl.bindBuffer(gl.ARRAY_BUFFER,glBuffer);
       const stride=32,position=gl.getAttribLocation(glProgram,'aPosition'),uv=gl.getAttribLocation(glProgram,'aUV'),tint=gl.getAttribLocation(glProgram,'aTint');
@@ -533,7 +550,7 @@
       let dy=sp+cp*sy*scale;
       let dz=-cy*cp+sn*sx*scale*aspect+cy*sp*sy*scale;
       const norm=Math.hypot(dx,dy,dz)||1;dx/=norm;dy/=norm;dz/=norm;
-      const eyeY=1.57+cameraBob;
+      const eyeY=1.57+cameraBob+jumpHeight;
       function rayBox(cx,cy,cz,hx,hy,hz){
         const lo=[cx-hx,cy-hy,cz-hz],hi=[cx+hx,cy+hy,cz+hz],orig=[cameraX,eyeY,cameraZ],dir=[dx,dy,dz];
         let t0=0,t1=12;
@@ -649,12 +666,16 @@
       movementFrame=requestAnimationFrame(movementTick);
     }
     function startMovementLoop(){if(movementFrame||done)return;lastMovementTime=0;movementFrame=requestAnimationFrame(movementTick)}
+    function jump(){
+      if(done||jumpHeight>0||jumpVelocity>0)return;
+      jumpVelocity=5.6;jumpHeight=.015;drawScene();
+    }
     function keyDown(e){
       if(done||token!==window.__city70Token||e.altKey||e.ctrlKey||e.metaKey)return;
       const target=e.target;if(target&&(target.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)))return;
       if(e.code==='ShiftLeft'||e.code==='ShiftRight'){e.preventDefault();if(shiftCrouchPrevious===null){shiftCrouchPrevious=crouching;crouching=true;updateHud()}return}
       if(KEY_ACTION[e.code]){e.preventDefault();if(!e.repeat){heldKeys.add(e.code);if(KEY_ACTION[e.code]==='sprint')syncSprintButton();startMovementLoop()}}
-      else if(e.code==='Space'&&!e.repeat){e.preventDefault();toggleCrouch()}
+      else if(e.code==='Space'&&!e.repeat){e.preventDefault();jump()}
       else if(e.code==='KeyE'&&!e.repeat){e.preventDefault();interactCenter()}
     }
     function keyUp(e){if((e.code==='ShiftLeft'||e.code==='ShiftRight')&&shiftCrouchPrevious!==null){crouching=shiftCrouchPrevious;shiftCrouchPrevious=null;updateHud();e.preventDefault();return}if(KEY_ACTION[e.code]){heldKeys.delete(e.code);if(KEY_ACTION[e.code]==='sprint')syncSprintButton();e.preventDefault()}}
