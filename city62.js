@@ -86,7 +86,7 @@
     function initGL(){
       if(!gl)return false;
       const vs='attribute vec3 aPosition;attribute vec2 aUV;attribute vec3 aTint;uniform mat4 uViewProjection;uniform vec3 uCamera;varying vec2 vUV;varying vec3 vTint;varying float vDepth;void main(){gl_Position=uViewProjection*vec4(aPosition,1.0);vUV=aUV;vTint=aTint;vDepth=length(aPosition-uCamera);}';
-      const fs='precision mediump float;uniform sampler2D uAtlas;uniform vec3 uFogColor;varying vec2 vUV;varying vec3 vTint;varying float vDepth;void main(){vec3 tex=texture2D(uAtlas,vUV).rgb;vec3 lit=tex*vTint;float fog=smoothstep(7.0,22.0,vDepth);gl_FragColor=vec4(mix(lit,uFogColor,fog),1.0);}';
+      const fs='precision mediump float;uniform sampler2D uAtlas;uniform vec3 uFogColor;varying vec2 vUV;varying vec3 vTint;varying float vDepth;void main(){vec3 tex=texture2D(uAtlas,vUV).rgb;vec3 lit=tex*vTint;float fog=smoothstep(12.0,34.0,vDepth);gl_FragColor=vec4(mix(lit,uFogColor,fog),1.0);}';
       try{
         const v=compileShader(gl.VERTEX_SHADER,vs),f=compileShader(gl.FRAGMENT_SHADER,fs);glProgram=gl.createProgram();gl.attachShader(glProgram,v);gl.attachShader(glProgram,f);gl.linkProgram(glProgram);
         if(!gl.getProgramParameter(glProgram,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(glProgram)||'Program link failed');
@@ -112,7 +112,7 @@
       for(const face of faces)for(const idx of order){const p=face.p[idx];let x=p[0]*sx,y=p[1]*sy,z=p[2]*sz;const rx=x*cr-y*sr,ry=x*sr+y*cr,wx=cx+rx*co+z*si,wz=cz-rx*si+z*co,t=uv[idx];out.push(wx,cy+ry,wz,t[0],t[1],base[0]*face.l,base[1]*face.l,base[2]*face.l)}
     }
     function drawWarden3D(add,x,z){
-      const yaw=Math.atan2(pos.x+.5-x,-(pos.y+.5-z)),part=(lx,y,lz,sx,sy,sz,type,tint,rz)=>{const wx=x+lx*Math.cos(yaw)+lz*Math.sin(yaw),wz=z-lx*Math.sin(yaw)+lz*Math.cos(yaw);add(wx,y,wz,sx,sy,sz,type,tint,yaw,rz||0)};
+      const yaw=Math.atan2(pos.x*2+1-x,-(pos.y*2+1-z)),part=(lx,y,lz,sx,sy,sz,type,tint,rz)=>{const wx=x+lx*Math.cos(yaw)+lz*Math.sin(yaw),wz=z-lx*Math.sin(yaw)+lz*Math.cos(yaw);add(wx,y,wz,sx,sy,sz,type,tint,yaw,rz||0)};
       const dark=[.72,.9,.92],mid=[.82,1,1],rib=[.48,1,1],glow=wardenAwake?[.25,1,1]:[.2,.58,.58];
       part(-.22,.43,0,.3,.82,.38,0,dark);part(.22,.43,0,.3,.82,.38,0,dark);part(-.22,.16,-.08,.38,.2,.52,1,mid);part(.22,.16,-.08,.38,.2,.52,1,mid);
       part(-.58,1.16,0,.28,.88,.38,0,dark,-.06);part(.58,1.16,0,.28,.88,.38,0,dark,.06);part(-.61,.55,-.02,.32,.34,.4,0,mid);part(.61,.55,-.02,.32,.34,.4,0,mid);
@@ -124,24 +124,48 @@
       part(-.32,1.55,-.03,.12,.22,.14,3,rib);part(.32,1.55,-.03,.12,.22,.14,3,rib);
     }
     function buildWorld(){
-      const verts=[],add=(...a)=>addCube(verts,...a);
-      for(let y=0;y<size;y++)for(let x=0;x<size;x++){const cx=x+.5,cz=y+.5;add(cx,-.075,cz,1,.15,1,(x+y)%4===0?2:1,[.76,.82,.83],0,0);
-        if(map[y][x]===1){add(cx,1.43,cz,1,2.86,1,0,[.9,.96,1],0,0);add(cx,2.91,cz,1.02,.12,1.02,2,[.72,.8,.82],0,0)}
-        else{add(cx,3.0,cz,1,.12,1,2,[.42,.52,.55],0,0);if((x*13+y*7)%17===0)add(cx,.012,cz,.34,.025,.34,3,[.75,1,1],0,0);if((x+y*3)%11===0){add(cx-.3,.18,cz,.08,.36,.08,2,[.55,.68,.7],0,0);add(cx+.3,.18,cz,.08,.36,.08,2,[.55,.68,.7],0,0)}}}
-      for(const r of relics)if(!r.found){const x=r.x+.5,z=r.y+.5;add(x,.38,z,.24,.48,.2,3,[.42,1,1],0,0);add(x,.68,z,.14,.28,.14,3,[.85,1,1],0,.12)}
-      for(const ch of chests)if(!ch.opened){const x=ch.x+.5,z=ch.y+.5;add(x,.22,z,.62,.42,.48,0,[.9,.62,.3],0,0);add(x,.47,z-.01,.62,.13,.48,0,[1,.72,.38],0,0);add(x,.3,z-.255,.09,.12,.025,2,[1,.9,.6],0,0)}
-      for(const sensor of sensors)if(!sensor.triggered){const x=sensor.x+.5,z=sensor.y+.5;add(x,.13,z,.42,.26,.42,3,[.45,1,1],0,0);add(x,.29,z,.15,.08,.15,3,[.8,1,1],0,0)}
-      const px=portal.x+.5,pz=portal.y+.5;add(px-.43,.9,pz,.14,1.8,.2,2,[.48,.82,.85],0,0);add(px+.43,.9,pz,.14,1.8,.2,2,[.48,.82,.85],0,0);add(px,1.78,pz,.95,.16,.2,3,[.25,.85,.86],0,0);
-      if(!same(warden,pos)||wardenAwake)drawWarden3D(add,warden.x+.5,warden.y+.5);
+      const verts=[],add=(...a)=>addCube(verts,...a),worldX=x=>x*2+1,worldZ=y=>y*2+1;
+      // Each maze cell becomes a 2x2 Minecraft-style block bay, so corridors have room to read as spaces.
+      for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+        const cx=worldX(x),cz=worldZ(y);
+        add(cx,-.075,cz,2,.15,2,(x+y)%4===0?2:1,[.76,.82,.83],0,0);
+        if(map[y][x]===1){
+          add(cx,1.43,cz,2,2.86,2,0,[.9,.96,1],0,0);
+          add(cx,2.91,cz,2.04,.12,2.04,2,[.72,.8,.82],0,0);
+        }else{
+          add(cx,3.0,cz,2,.12,2,2,[.42,.52,.55],0,0);
+          // Deepslate floor seams and sculk patches add scale and depth without blocking movement.
+          if((x*13+y*7)%7===0)add(cx,.012,cz,.62,.025,.62,3,[.75,1,1],0,0);
+          if((x+y*3)%5===0){
+            add(cx-.76,.22,cz,.12,.44,.12,2,[.55,.68,.7],0,0);
+            add(cx+.76,.22,cz,.12,.44,.12,2,[.55,.68,.7],0,0);
+          }
+          if((x*5+y*11)%9===0)add(cx,.34,cz-.78,.42,.68,.08,3,[.3,.72,.72],0,0);
+        }
+      }
+      // Small projecting deepslate ribs make wall faces look like built Minecraft architecture.
+      for(let y=0;y<size;y++)for(let x=0;x<size;x++)if(map[y][x]===1){
+        const cx=worldX(x),cz=worldZ(y);
+        if((x+y)%3===0){
+          add(cx-.82,.92,cz-.98,.18,1.84,.12,2,[.68,.78,.8],0,0);
+          add(cx+.82,.92,cz-.98,.18,1.84,.12,2,[.68,.78,.8],0,0);
+        }
+      }
+      for(const r of relics)if(!r.found){const x=worldX(r.x),z=worldZ(r.y);add(x,.38,z,.34,.48,.28,3,[.42,1,1],0,0);add(x,.68,z,.2,.28,.2,3,[.85,1,1],0,.12)}
+      for(const ch of chests)if(!ch.opened){const x=worldX(ch.x),z=worldZ(ch.y);add(x,.22,z,.82,.42,.72,0,[.9,.62,.3],0,0);add(x,.47,z-.01,.82,.13,.72,0,[1,.72,.38],0,0);add(x,.3,z-.37,.12,.12,.04,2,[1,.9,.6],0,0)}
+      for(const sensor of sensors)if(!sensor.triggered){const x=worldX(sensor.x),z=worldZ(sensor.y);add(x,.13,z,.58,.26,.58,3,[.45,1,1],0,0);add(x,.29,z,.22,.08,.22,3,[.8,1,1],0,0)}
+      const px=worldX(portal.x),pz=worldZ(portal.y);
+      add(px-.78,.9,pz,.18,1.8,.24,2,[.48,.82,.85],0,0);add(px+.78,.9,pz,.18,1.8,.24,2,[.48,.82,.85],0,0);add(px,1.78,pz,1.72,.16,.24,3,[.25,.85,.86],0,0);
+      if(!same(warden,pos)||wardenAwake)drawWarden3D(add,worldX(warden.x),worldZ(warden.y));
       return new Float32Array(verts);
     }
     function drawScene(){
-      if(!glReady||done)return;const verts=buildWorld(),yaw=facing*Math.PI/2,eye=[pos.x+.5,1.57,pos.y+.5],target=[eye[0]+Math.sin(yaw),1.57,eye[2]-Math.cos(yaw)];
-      const projection=matPerspective(Math.PI/2.65,canvas.width/canvas.height,.06,38),viewMatrix=matLookAt(eye,target,[0,1,0]),vp=matMultiply(projection,viewMatrix);
+      if(!glReady||done)return;const verts=buildWorld(),yaw=facing*Math.PI/2,eye=[pos.x*2+1,1.57,pos.y*2+1],target=[eye[0]+Math.sin(yaw),1.57,eye[2]-Math.cos(yaw)];
+      const projection=matPerspective(Math.PI/2.45,canvas.width/canvas.height,.06,55),viewMatrix=matLookAt(eye,target,[0,1,0]),vp=matMultiply(projection,viewMatrix);
       gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(.012,.03,.043,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(glProgram);gl.bindBuffer(gl.ARRAY_BUFFER,glBuffer);gl.bufferData(gl.ARRAY_BUFFER,verts,gl.DYNAMIC_DRAW);
       const stride=32,position=gl.getAttribLocation(glProgram,'aPosition'),uv=gl.getAttribLocation(glProgram,'aUV'),tint=gl.getAttribLocation(glProgram,'aTint');
       gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,3,gl.FLOAT,false,stride,0);gl.enableVertexAttribArray(uv);gl.vertexAttribPointer(uv,2,gl.FLOAT,false,stride,12);gl.enableVertexAttribArray(tint);gl.vertexAttribPointer(tint,3,gl.FLOAT,false,stride,20);
-      gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,atlasTexture);gl.uniformMatrix4fv(gl.getUniformLocation(glProgram,'uViewProjection'),false,vp);gl.uniform3f(gl.getUniformLocation(glProgram,'uCamera'),eye[0],eye[1],eye[2]);gl.uniform3f(gl.getUniformLocation(glProgram,'uFogColor'),.012,.035,.05);gl.drawArrays(gl.TRIANGLES,0,verts.length/8);
+      gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,atlasTexture);gl.uniformMatrix4fv(gl.getUniformLocation(glProgram,'uViewProjection'),false,vp);gl.uniform3f(gl.getUniformLocation(glProgram,'uCamera'),eye[0],eye[1],eye[2]);gl.uniform3f(gl.getUniformLocation(glProgram,'uFogColor'),.018,.055,.065);gl.drawArrays(gl.TRIANGLES,0,verts.length/8);
       label.textContent=wardenAwake&&wardenStun===0?'👁️ СТРАЖ СЛЫШИТ ТЕБЯ · 3D':'🎮 3D · ДРЕВНИЙ ГОРОД';
     }
     if(!initGL())label.textContent='⚠️ WebGL не поддерживается этим браузером';
