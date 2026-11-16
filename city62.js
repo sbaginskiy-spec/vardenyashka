@@ -1,4 +1,4 @@
-/* Варденяшка 7.3 — real WebGL voxel Ancient City and a fully 3D Warden. */
+/* Варденяшка 7.16 — continuous first-person movement between Minecraft blocks. */
 (() => {
   'use strict';
   const STYLE_ID='city70-style';
@@ -22,7 +22,7 @@
     #v5out .city70-map-cell.warden{background:#e7ffff;box-shadow:0 0 8px #b5ffff}
     #v5out .city70-log{min-height:42px;margin:8px 0;padding:10px 11px;border:1px solid #315e68;border-radius:9px;background:#0a202a;color:#e1f9f5;font-size:13px;line-height:1.45}
     #v5out .city70-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;max-width:410px;margin:10px auto}
-    #v5out .city70-controls button{min-width:0;min-height:54px;padding:8px 4px;border-radius:11px;font-size:15px;font-weight:800;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+    #v5out .city70-controls button{min-width:0;min-height:54px;padding:8px 4px;border-radius:11px;font-size:15px;font-weight:800;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}#v5out .city70-controls button.is-held{background:linear-gradient(180deg,#267d91,#14516b);border-color:#9af4ff;transform:translateY(2px);box-shadow:0 1px 0 #06131e}
     #v5out .city70-controls .empty{visibility:hidden}
     #v5out .city70-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:8px 0}
     #v5out .city70-actions button{min-width:0;min-height:46px;padding:7px 4px;font-size:12px;line-height:1.25}
@@ -44,8 +44,11 @@
     const reachable=[];for(let y=1;y<size-1;y++)for(let x=1;x<size-1;x++)if(map[y][x]===0&&!(x===1&&y===1))reachable.push({x,y});shuffle(reachable);
     const relics=reachable.splice(0,required).map(p=>({...p,found:false})),chestCount=difficulty==='easy'?3:difficulty==='hard'?5:4,chests=reachable.splice(0,chestCount).map(p=>({...p,opened:false})),sensorCount=difficulty==='easy'?3:difficulty==='hard'?7:5,sensors=reachable.splice(0,sensorCount).map(p=>({...p,triggered:false})),woolCount=difficulty==='hard'?2:3,wool=reachable.splice(0,woolCount),spawnDistances=distanceMap(map,start);reachable.sort((a,b)=>(spawnDistances.get(b.x+','+b.y)||0)-(spawnDistances.get(a.x+','+a.y)||0));const wardenSpawn={...(reachable.shift()||{x:size-2,y:size-2})};let warden={...wardenSpawn};
     const stats=readStats();stats.runs++;saveStats(stats);let moves=0,health=maxHealth,lantern=difficulty==='hard'?2:3,noise=0,wardenAwake=false,wardenStun=0,wardenStep=0,done=false,crouching=false,mapOpen=false;
-    // Smooth first-person camera: the maze remains grid-based, while the view glides between cell centres.
+    // The player moves continuously in world space; grid cells are used only for collisions and discoveries.
     let cameraX=pos.x*2+1,cameraZ=pos.y*2+1,cameraYaw=facing*Math.PI/2,cameraPitch=0,cameraBob=0,cameraAnimation=null,cameraFrame=0,queuedAction=null,worldVerts=null,worldDirty=true;
+    const heldKeys=new Set(),heldPointers=new Map(),KEY_ACTION={ArrowUp:'forward',KeyW:'forward',ArrowDown:'back',KeyS:'back',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right'};
+    let movementFrame=0,lastMovementTime=0,wallMessageAt=0;
+    const PLAYER_RADIUS=.27,MOVE_SPEED=3.25,TURN_SPEED=2.1;
     let wardenMotion=null,wardenAttackAt=0,wardenWakeAt=0,wardenFrame=0,wardenLastFrame=0;
     const wrap=document.createElement('div');wrap.className='city70-wrap';out.append(wrap);
     const hudBox=document.createElement('div');hudBox.className='city70-hud';wrap.append(hudBox);
@@ -56,14 +59,17 @@
     const controls=document.createElement('div');controls.className='city70-controls';wrap.append(controls);
     function control(text,aria,fn,cls){const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',aria);if(cls)b.className=cls;b.addEventListener('click',fn);controls.append(b);return b}
     const blank=document.createElement('span');blank.className='empty';controls.append(blank);
-    control('⬆️ Вперёд','Идти вперёд',()=>move(1));control('↻ Вправо','Повернуть направо',()=>turn(1));
-    control('↶ Влево','Повернуть налево',()=>turn(-1));control('⬇️ Назад','Идти назад',()=>move(-1));
+    const forwardBtn=control('⬆️ Вперёд','Удерживать для движения вперёд',()=>{},'hold-control');
+    const rightBtn=control('↻ Вправо','Удерживать для плавного поворота направо',()=>{},'hold-control');
+    const leftBtn=control('↶ Влево','Удерживать для плавного поворота налево',()=>{},'hold-control');
+    const backBtn=control('⬇️ Назад','Удерживать для движения назад',()=>{},'hold-control');
+    bindHold(forwardBtn,'forward');bindHold(rightBtn,'right');bindHold(leftBtn,'left');bindHold(backBtn,'back');
     const crouchBtn=control('🤫 Тихо: выкл','Включить тихий шаг',toggleCrouch);
     const actions=document.createElement('div');actions.className='city70-actions';wrap.append(actions);
     function actionButton(text,aria,fn){const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',aria);b.addEventListener('click',fn);actions.append(b);return b}
     const lanternBtn=actionButton('🔦 Фонарь ×'+lantern,'Использовать душевный фонарь',useLantern),mapBtn=actionButton('🗺️ Карта','Показать карту города',toggleMap),diaryBtn=actionButton('📜 Дневник','Открыть дневник экспедиции',diary);
     const mapPanel=document.createElement('div');mapPanel.className='city70-map';wrap.append(mapPanel);
-    const help=document.createElement('p');help.className='city70-help';help.textContent='Обзор: проведи пальцем по 3D-окну, чтобы осматриваться в стороны, вверх и вниз. На компьютере зажми левую кнопку мыши и двигай мышь. Вперёд/назад — движение по ближайшему направлению взгляда, лево/право — поворот. WASD или стрелки тоже работают. Включи тихий шаг, чтобы не поднимать шум.';wrap.append(help);
+    const help=document.createElement('p');help.className='city70-help';help.textContent='Движение: удерживай «Вперёд» или «Назад» — Варденяшка идёт непрерывно и может остановиться между блоками. Удерживай «Влево» или «Вправо» для плавного поворота. На компьютере — удерживай WASD или стрелки. Обзор: проведи пальцем по 3D-окну. Включи тихий шаг, чтобы не поднимать шум.';wrap.append(help);
     field.hidden=true;let cssW=360,cssH=300,dpr=1;
     const gl=canvas.getContext('webgl',{alpha:false,antialias:true,depth:true,stencil:false,powerPreference:'low-power'})||canvas.getContext('experimental-webgl',{alpha:false,antialias:true,depth:true,stencil:false});
     let glProgram=null,glBuffer=null,wardenBuffer=null,atlasTexture=null,glReady=false;
@@ -364,20 +370,20 @@
     if(!initGL())label.textContent='⚠️ WebGL не поддерживается этим браузером';
     function same(a,b){return !!a&&a.x===b.x&&a.y===b.y}
     function updateHud(){
-      const rows=[['❤️ Здоровье',health+'/'+maxHealth],['💎 Реликвии',relics.filter(r=>r.found).length+'/'+required],['👣 Шаги',moves+'/'+maxMoves],['🔊 Шум',noise+'/7'],['🔦 Фонарь',String(lantern)],['👁️ Страж',wardenStun>0?'Оглушён':wardenAwake?'Охотится':'Спит']];
+      const rows=[['❤️ Здоровье',health+'/'+maxHealth],['💎 Реликвии',relics.filter(r=>r.found).length+'/'+required],['👣 Блоки',moves+'/'+maxMoves],['🔊 Шум',noise+'/7'],['🔦 Фонарь',String(lantern)],['👁️ Страж',wardenStun>0?'Оглушён':wardenAwake?'Охотится':'Спит']];
       hudBox.replaceChildren(...rows.map(([name,value])=>{const el=document.createElement('div');el.className='city70-stat';const span=document.createElement('span');span.textContent=name;const b=document.createElement('b');b.textContent=value;el.append(span,b);return el}));
       lanternBtn.textContent='🔦 Фонарь ×'+lantern;lanternBtn.disabled=lantern<=0||!wardenAwake||wardenStun>0||done;crouchBtn.textContent=crouching?'🤫 Тихо: вкл':'🤫 Тихо: выкл';crouchBtn.setAttribute('aria-label',crouching?'Выключить тихий шаг':'Включить тихий шаг');mapBtn.textContent=mapOpen?'✖ Закрыть карту':'🗺️ Карта';
     }
     function setLog(t){log.textContent=t}
     function renderMap(){mapPanel.replaceChildren();const title=document.createElement('strong');title.textContent='🗺️ Карта исследованной области';mapPanel.append(title);const grid=document.createElement('div');grid.className='city70-map-grid';grid.style.gridTemplateColumns='repeat('+size+',minmax(0,1fr))';for(let y=0;y<size;y++)for(let x=0;x<size;x++){const el=document.createElement('span');el.className='city70-map-cell'+(map[y][x]?' wall':'');const p={x,y};if(same(pos,p))el.classList.add('hero');else if(wardenAwake&&same(warden,p))el.classList.add('warden');else if(relics.some(r=>!r.found&&same(r,p)))el.classList.add('relic');grid.append(el)}mapPanel.append(grid);const legend=document.createElement('p');legend.className='city70-help';legend.textContent='Голубой — ты · белый — Страж · светлый — реликвия · тёмный — стена.';mapPanel.append(legend)}
     function toggleMap(){mapOpen=!mapOpen;mapPanel.classList.toggle('open',mapOpen);if(mapOpen)renderMap();drawScene();updateHud()}
-    function diary(){setLog('📜 Экспедиция №'+stats.runs+' · Сложность: '+difficulty+' · Реликвии: '+relics.filter(r=>r.found).length+'/'+required+' · Сундуки: '+chests.filter(c=>c.opened).length+'/'+chestCount+' · Шаги: '+moves+' · Шум: '+noise+'/7 · Страж: '+(wardenAwake?'проснулся':'спит'))}
-    let keyHandler=null;
+    function diary(){setLog('📜 Экспедиция №'+stats.runs+' · Сложность: '+difficulty+' · Реликвии: '+relics.filter(r=>r.found).length+'/'+required+' · Сундуки: '+chests.filter(c=>c.opened).length+'/'+chestCount+' · Блоки: '+moves+' · Шум: '+noise+'/7 · Страж: '+(wardenAwake?'проснулся':'спит'))}
+    let keyHandler=null,keyUpHandler=null;
     function finish(won,reason){
       if(done)return;done=true;if(cameraFrame)cancelAnimationFrame(cameraFrame);cameraFrame=0;cameraAnimation=null;queuedAction=null;cameraBob=0;window.__city70Token++;if(won){stats.wins++;saveStats(stats);rewardChallenge(34+Math.max(0,maxMoves-moves)*.18,'Древний город исследован! Ты вернулся с реликвиями.');ach('Повелитель Древнего города');ach('Тихий исследователь')}
-      if(keyHandler)document.removeEventListener('keydown',keyHandler);if(wardenFrame)cancelAnimationFrame(wardenFrame);wardenFrame=0;wrap.replaceChildren();
+      if(keyHandler)document.removeEventListener('keydown',keyHandler);if(keyUpHandler)document.removeEventListener('keyup',keyUpHandler);window.removeEventListener('blur',clearHeldInput);clearHeldInput();if(wardenFrame)cancelAnimationFrame(wardenFrame);wardenFrame=0;wrap.replaceChildren();
       const title=document.createElement('h3');title.textContent=won?'🏆 Экспедиция завершена!':'💔 Экспедиция окончена';wrap.append(title);
-      const summary=document.createElement('p');summary.textContent=reason+' · Реликвии: '+relics.filter(r=>r.found).length+'/'+required+' · Сундуки: '+chests.filter(c=>c.opened).length+'/'+chestCount+' · Шаги: '+moves;wrap.append(summary);
+      const summary=document.createElement('p');summary.textContent=reason+' · Реликвии: '+relics.filter(r=>r.found).length+'/'+required+' · Сундуки: '+chests.filter(c=>c.opened).length+'/'+chestCount+' · Пройдено блоков: '+moves;wrap.append(summary);
       const record=document.createElement('p');record.className='city70-help';record.textContent='📜 Экспедиций: '+stats.runs+' · Побед: '+stats.wins+' · Найдено реликвий: '+stats.relics+' · Открыто сундуков: '+stats.chests;wrap.append(record);
       btn('🏛️ Новая экспедиция',()=>window.city70Restart&&window.city70Restart());btn('↩️ В приключения',()=>{const b=document.querySelector('[data-v5="city"]');if(b)b.click()});
     }
@@ -411,40 +417,82 @@
       if(noise>=7&&!wardenAwake){wardenAwake=true;wardenWakeAt=performance.now();setLog('👁️ СТРАЖ ПРОСНУЛСЯ! Используй фонарь и тихий шаг.');startWardenLoop()}
       if(relics.every(r=>r.found)&&same(pos,portal)){finish(true,'Ты вернулся к порталу с древними реликвиями!');return}
     }
-    function runOrQueue(action){if(done)return;if(cameraAnimation){if(!queuedAction)queuedAction=action;return}action()}
-    function animateCamera(toX,toZ,toYaw,duration,kind){
-      if(cameraFrame)cancelAnimationFrame(cameraFrame);
-      const fromX=cameraX,fromZ=cameraZ,fromYaw=cameraYaw;
-      const targetYaw=toYaw===null?fromYaw:toYaw;
-      const started=performance.now();
-      cameraAnimation={kind};
-      drawScene();
-      const tick=now=>{
-        if(done||token!==window.__city70Token){cameraAnimation=null;cameraFrame=0;cameraBob=0;return}
-        const t=clamp((now-started)/duration,0,1),ease=t*t*(3-2*t);
-        cameraX=fromX+(toX-fromX)*ease;
-        cameraZ=fromZ+(toZ-fromZ)*ease;
-        cameraYaw=fromYaw+(targetYaw-fromYaw)*ease;
-        cameraBob=kind==='walk'?Math.sin(t*Math.PI)*(crouching?.018:.038):0;
-        drawScene();
-        if(t<1){cameraFrame=requestAnimationFrame(tick);return}
-        cameraX=toX;cameraZ=toZ;cameraYaw=targetYaw;cameraBob=0;
-        cameraAnimation=null;cameraFrame=0;
-        const next=queuedAction;queuedAction=null;if(next&&!done)next();
-      };
-      cameraFrame=requestAnimationFrame(tick);
-    }
-    function step(dx,dy){if(done||token!==window.__city70Token)return false;const nx=pos.x+dx,ny=pos.y+dy;if(!map[ny]||map[ny][nx]!==0){setLog('🪨 Впереди древняя стена. Поищи другой проход.');return false}pos.x=nx;pos.y=ny;moves++;const quiet=crouching||wool.some(w=>same(w,pos));if(!quiet)noise=Math.min(7,noise+1);enterCell();if(done)return true;if(wardenStun>0)wardenStun--;else if(wardenAwake){wardenStep++;if(wardenStep%2===0)wardenMove()}if(done)return true;if(moves>=maxMoves){finish(false,'Закончились шаги.');return true}worldDirty=true;animateCamera(nx*2+1,ny*2+1,cameraYaw,crouching?390:280,'walk');updateHud();if(mapOpen)renderMap();return true}
-    function move(direction){runOrQueue(()=>{const sign=direction===1?1:-1,f=DIRS[facing];step(f[0]*sign,f[1]*sign)})}
-    function turn(delta){runOrQueue(()=>{const targetYaw=cameraYaw+delta*Math.PI/2;facing=((Math.round(targetYaw/(Math.PI/2))%4)+4)%4;updateHud();animateCamera(cameraX,cameraZ,targetYaw,270,'turn')})}
-    function toggleCrouch(){if(done)return;crouching=!crouching;setLog(crouching?'🤫 Ты крадёшься. Шаги не повышают шум.':'👣 Ты снова идёшь обычным шагом.');updateHud()}
+    function toggleCrouch(){if(done)return;crouching=!crouching;setLog(crouching?'🤫 Ты крадёшься. Движение не повышает шум.':'👣 Ты снова идёшь обычным шагом.');updateHud()}
     function useLantern(){if(done||!wardenAwake||wardenStun>0||lantern<=0)return;lantern--;wardenAttackAt=0;wardenStun=4;noise=Math.max(0,noise-2);setLog('🔦 Душевный фонарь ослепил Стража на 4 хода!');updateHud();drawScene()}
-    function keyAction(e){if(done||token!==window.__city70Token||e.altKey||e.ctrlKey||e.metaKey||e.repeat)return;const k=e.code;if(k==='ArrowUp'||k==='KeyW'){e.preventDefault();move(1)}else if(k==='ArrowDown'||k==='KeyS'){e.preventDefault();move(-1)}else if(k==='ArrowLeft'||k==='KeyA'){e.preventDefault();turn(-1)}else if(k==='ArrowRight'||k==='KeyD'){e.preventDefault();turn(1)}else if(k==='Space'){e.preventDefault();toggleCrouch()}}
-    keyHandler=keyAction;document.addEventListener('keydown',keyHandler);
+    function syncFacingToView(){const nearest=Math.round(cameraYaw/(Math.PI/2));facing=((nearest%4)+4)%4}
+    function isHeld(action){for(const code of heldKeys)if(KEY_ACTION[code]===action)return true;for(const held of heldPointers.values())if(held===action)return true;return false}
+    function hasMovementInput(){return isHeld('forward')||isHeld('back')||isHeld('left')||isHeld('right')}
+    function clearHeldInput(){heldKeys.clear();heldPointers.clear();controls.querySelectorAll('button.is-held').forEach(b=>b.classList.remove('is-held'));if(movementFrame)cancelAnimationFrame(movementFrame);movementFrame=0;lastMovementTime=0;if(cameraBob){cameraBob=0;if(!done)drawScene()}}
+    function bindHold(button,action){
+      button.addEventListener('pointerdown',e=>{
+        if(done||!e.isPrimary||(e.pointerType==='mouse'&&e.button!==0))return;
+        e.preventDefault();heldPointers.set(e.pointerId,action);button.classList.add('is-held');
+        if(button.setPointerCapture)try{button.setPointerCapture(e.pointerId)}catch(_){}
+        startMovementLoop();
+      });
+      const release=e=>{
+        if(e&&heldPointers.get(e.pointerId)!==action)return;
+        if(e)heldPointers.delete(e.pointerId);
+        if(![...heldPointers.values()].includes(action))button.classList.remove('is-held');
+      };
+      button.addEventListener('pointerup',release);button.addEventListener('pointercancel',release);button.addEventListener('lostpointercapture',release);
+      button.addEventListener('contextmenu',e=>e.preventDefault());
+    }
+    function canOccupy(x,z){
+      const r=PLAYER_RADIUS;
+      for(const [px,pz] of [[x-r,z-r],[x+r,z-r],[x-r,z+r],[x+r,z+r]]){
+        const cx=Math.floor(px/2),cy=Math.floor(pz/2);
+        if(!map[cy]||map[cy][cx]!==0)return false;
+      }
+      return true;
+    }
+    function enterNewCell(nx,ny){
+      if(nx===pos.x&&ny===pos.y)return;
+      pos.x=nx;pos.y=ny;moves++;
+      const quiet=crouching||wool.some(w=>same(w,pos));if(!quiet)noise=Math.min(7,noise+1);
+      enterCell();if(done)return;
+      if(wardenStun>0)wardenStun--;else if(wardenAwake){wardenStep++;if(wardenStep%2===0)wardenMove()}
+      if(done)return;
+      if(moves>=maxMoves){finish(false,'Закончился лимит пройденных блоков.');return}
+      updateHud();if(mapOpen)renderMap();
+    }
+    function movementTick(now){
+      if(done||token!==window.__city70Token){movementFrame=0;return}
+      if(!hasMovementInput()){movementFrame=0;lastMovementTime=0;if(cameraBob){cameraBob=0;drawScene()}return}
+      const dt=lastMovementTime?Math.min(.05,Math.max(0,(now-lastMovementTime)/1000)):0;lastMovementTime=now;
+      const turnDir=(isHeld('right')?1:0)-(isHeld('left')?1:0);
+      if(turnDir){cameraYaw+=turnDir*TURN_SPEED*dt;syncFacingToView()}
+      const forwardDir=(isHeld('forward')?1:0)-(isHeld('back')?1:0);
+      let moved=false,blocked=false;
+      if(forwardDir&&dt>0){
+        const distance=MOVE_SPEED*forwardDir*dt,dx=Math.sin(cameraYaw)*distance,dz=-Math.cos(cameraYaw)*distance;
+        const oldX=cameraX,oldZ=cameraZ;
+        const candidateX=cameraX+dx;if(canOccupy(candidateX,cameraZ))cameraX=candidateX;else blocked=true;
+        const candidateZ=cameraZ+dz;if(canOccupy(cameraX,candidateZ))cameraZ=candidateZ;else blocked=true;
+        moved=Math.abs(cameraX-oldX)+Math.abs(cameraZ-oldZ)>.0001;
+        if(moved){
+          const nx=Math.floor(cameraX/2),ny=Math.floor(cameraZ/2);
+          if(map[ny]&&map[ny][nx]===0&&(nx!==pos.x||ny!==pos.y))enterNewCell(nx,ny);
+          if(done){movementFrame=0;return}
+        }
+      }
+      if(blocked&&now-wallMessageAt>900){setLog('🪨 Впереди древняя стена. Поищи другой проход.');wallMessageAt=now}
+      cameraBob=moved?Math.sin(now*.014)*(crouching?.012:.026):0;
+      if(turnDir||moved)drawScene();
+      movementFrame=requestAnimationFrame(movementTick);
+    }
+    function startMovementLoop(){if(movementFrame||done)return;lastMovementTime=0;movementFrame=requestAnimationFrame(movementTick)}
+    function keyDown(e){
+      if(done||token!==window.__city70Token||e.altKey||e.ctrlKey||e.metaKey)return;
+      const target=e.target;if(target&&(target.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)))return;
+      if(KEY_ACTION[e.code]){e.preventDefault();if(!e.repeat){heldKeys.add(e.code);startMovementLoop()}}
+      else if(e.code==='Space'&&!e.repeat){e.preventDefault();toggleCrouch()}
+    }
+    function keyUp(e){if(KEY_ACTION[e.code]){heldKeys.delete(e.code);e.preventDefault()}}
+    keyHandler=keyDown;keyUpHandler=keyUp;document.addEventListener('keydown',keyHandler);document.addEventListener('keyup',keyUpHandler);window.addEventListener('blur',clearHeldInput);
     // Dragging the 3D viewport changes the camera freely; movement stays on the nearest maze direction.
     let lookDrag=null;
     canvas.style.touchAction='none';canvas.style.cursor='grab';
-    function syncFacingToView(){const nearest=Math.round(cameraYaw/(Math.PI/2));facing=((nearest%4)+4)%4}
     canvas.addEventListener('pointerdown',e=>{
       if(done||!e.isPrimary||(e.pointerType==='mouse'&&e.button!==0))return;
       if(cameraFrame){if(cameraAnimation&&cameraAnimation.kind==='walk'){cameraX=pos.x*2+1;cameraZ=pos.y*2+1}cancelAnimationFrame(cameraFrame);cameraFrame=0;cameraAnimation=null;cameraBob=0;queuedAction=null}
@@ -470,7 +518,7 @@
     canvas.addEventListener('pointercancel',endLookDrag);
     canvas.addEventListener('lostpointercapture',endLookDrag);
     function onResize(){resize()}
-    window.addEventListener('resize',onResize);window.city70Restart=()=>{if(keyHandler)document.removeEventListener('keydown',keyHandler);if(wardenFrame)cancelAnimationFrame(wardenFrame);wardenFrame=0;window.removeEventListener('resize',onResize);const b=document.querySelector('[data-v5="city"]');if(b)b.click()};
+    window.addEventListener('resize',onResize);window.city70Restart=()=>{if(keyHandler)document.removeEventListener('keydown',keyHandler);if(keyUpHandler)document.removeEventListener('keyup',keyUpHandler);window.removeEventListener('blur',clearHeldInput);clearHeldInput();if(wardenFrame)cancelAnimationFrame(wardenFrame);wardenFrame=0;window.removeEventListener('resize',onResize);const b=document.querySelector('[data-v5="city"]');if(b)b.click()};
     if(window.visualViewport)window.visualViewport.addEventListener('resize',onResize);
     resize();updateHud();drawScene();startWardenLoop();
   };
