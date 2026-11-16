@@ -79,8 +79,12 @@
         const p={x:pos.x+f[0]*d,y:pos.y+f[1]*d},near=bounds(d-1),far=bounds(d),lp={x:p.x+left[0],y:p.y+left[1]},rp={x:p.x+right[0],y:p.y+right[1]};
         poly([[near.l,near.b],[near.r,near.b],[far.r,far.b],[far.l,far.b]],d%2?'#1b3033':'#22383a','#30484a');
         ctx.strokeStyle='#40585a';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(near.l,near.b);ctx.lineTo(far.l,far.b);ctx.moveTo(near.r,near.b);ctx.lineTo(far.r,far.b);ctx.stroke();
-        poly([[near.l,near.t],[far.l,far.t],[far.l,far.b],[near.l,near.b]],map[lp.y]&&map[lp.y][lp.x]===1?'#20383b':'#13272b','#385456');
-        poly([[near.r,near.t],[far.r,far.t],[far.r,far.b],[near.r,near.b]],map[rp.y]&&map[rp.y][rp.x]===1?'#20383b':'#13272b','#385456');
+        const leftOpen=!!(map[lp.y]&&map[lp.y][lp.x]===0),rightOpen=!!(map[rp.y]&&map[rp.y][rp.x]===0);
+        poly([[near.l,near.t],[far.l,far.t],[far.l,far.b],[near.l,near.b]],leftOpen?'#10272b':'#20383b','#385456');
+        poly([[near.r,near.t],[far.r,far.t],[far.r,far.b],[near.r,near.b]],rightOpen?'#10272b':'#20383b','#385456');
+        // Side passages are dark doorways, so the player can recognise branches before turning.
+        if(leftOpen)poly([[near.l+(near.r-near.l)*.08,near.t+(near.b-near.t)*.22],[far.l+(far.r-far.l)*.08,far.t+(far.b-far.t)*.22],[far.l+(far.r-far.l)*.08,far.b-(far.b-far.t)*.16],[near.l+(near.r-near.l)*.08,near.b-(near.b-near.t)*.16]],'#030d12','#315154');
+        if(rightOpen)poly([[near.r-(near.r-near.l)*.08,near.t+(near.b-near.t)*.22],[far.r-(far.r-far.l)*.08,far.t+(far.b-far.t)*.22],[far.r-(far.r-far.l)*.08,far.b-(far.b-far.t)*.16],[near.r-(near.r-near.l)*.08,near.b-(near.b-near.t)*.16]],'#030d12','#315154');
         if(!map[p.y]||map[p.y][p.x]===1){wallTexture(far.l,far.t,far.r,far.b,d,true);break}
         const obj=cellObject(p.x,p.y);if(obj){const scale=clamp(.9/(d*.48),.16,.75);drawObject(obj,cx,far.b-(far.b-far.t)*.40,scale)}
         if(wool.some(v=>same(v,p))){ctx.fillStyle='#c5d9d0';ctx.fillRect(far.l+(far.r-far.l)*.3,far.b-4,Math.max(2,(far.r-far.l)*.4),3)}
