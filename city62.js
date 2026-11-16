@@ -77,7 +77,7 @@
     let wardenWorldX=wardenSpawn.x*2+1,wardenWorldZ=wardenSpawn.y*2+1,wardenWaypoint=null;
     let wardenChaseLast=0,wardenStunUntil=0,wardenAttackCooldown=0,wardenMapRefresh=0;
     const WARDEN_SPEED=difficulty==='easy'?1.95:difficulty==='hard'?2.8:2.35;
-    const wardenAutoWakeAt=performance.now()+4000;
+    const WARDEN_WAKE_NOISE=3;
     const wrap=document.createElement('div');wrap.className='city70-wrap';out.append(wrap);
     const hudBox=document.createElement('div');hudBox.className='city70-hud';wrap.append(hudBox);
     const view=document.createElement('div');view.className='city70-view';wrap.append(view);
@@ -397,7 +397,7 @@
     if(!initGL())label.textContent='⚠️ WebGL не поддерживается этим браузером';
     function same(a,b){return !!a&&a.x===b.x&&a.y===b.y}
     function updateHud(){
-      const rows=[['❤️ Здоровье',health+'/'+maxHealth],['💎 Реликвии',relics.filter(r=>r.found).length+'/'+required],['👣 Блоки',moves+'/'+maxMoves],['🔊 Шум',noise+'/7'],['🔦 Фонарь',String(lantern)],['👁️ Страж',wardenStun>0?'Оглушён':wardenAwake?'Охотится':'Спит']];
+      const rows=[['❤️ Здоровье',health+'/'+maxHealth],['💎 Реликвии',relics.filter(r=>r.found).length+'/'+required],['👣 Блоки',moves+'/'+maxMoves],['🔊 Шум',noise+'/3'],['🔦 Фонарь',String(lantern)],['👁️ Страж',wardenStun>0?'Оглушён':wardenAwake?'Охотится':'Спит']];
       hudBox.replaceChildren(...rows.map(([name,value])=>{const el=document.createElement('div');el.className='city70-stat';const span=document.createElement('span');span.textContent=name;const b=document.createElement('b');b.textContent=value;el.append(span,b);return el}));
       lanternBtn.textContent='🔦 Фонарь ×'+lantern;lanternBtn.disabled=lantern<=0||!wardenAwake||wardenStun>0||done;crouchBtn.textContent=crouching?'🤫 Тихо: вкл':'🤫 Тихо: выкл';crouchBtn.setAttribute('aria-label',crouching?'Выключить тихий шаг':'Включить тихий шаг');mapBtn.textContent=mapOpen?'✖ Закрыть карту':'🗺️ Карта';
     }
@@ -417,12 +417,12 @@
     function wakeWarden(now){
       if(wardenAwake||done)return;
       wardenAwake=true;wardenWakeAt=now;
-      setLog('👁️ СТРАЖ ПРОСНУЛСЯ! Он будет непрерывно искать тебя, даже если ты остановишься. Беги или используй фонарь!');
+      setLog('👁️ СТРАЖ ПРОСНУЛСЯ! Ты пошумел три раза — теперь он будет искать тебя, пока ты не спрячешься. Беги или используй фонарь!');
       updateHud();startWardenLoop();
     }
     function updateWardenChase(now,dt){
       if(!wardenAwake){
-        if(now>=wardenAutoWakeAt)wakeWarden(now);
+        // The Warden wakes only after three noisy events.
         return;
       }
       const stunRemaining=Math.ceil(Math.max(0,wardenStunUntil-now)/1000);
@@ -476,8 +476,8 @@
     }
     function enterCell(){
       // Chests and relics are collected only by a deliberate tap/click, not by walking over them.
-      const sensor=sensors.find(s=>!s.triggered&&same(s,pos));if(sensor){sensor.triggered=true;noise=Math.min(7,noise+3);setLog('🔊 Скалк-сенсор сработал! Шум резко вырос.')}
-      if(noise>=7&&!wardenAwake)wakeWarden(performance.now())
+      const sensor=sensors.find(s=>!s.triggered&&same(s,pos));if(sensor){sensor.triggered=true;noise=Math.min(WARDEN_WAKE_NOISE,noise+1);setLog('🔊 Скалк-сенсор сработал! Шум '+noise+'/3.')}
+      if(noise>=WARDEN_WAKE_NOISE&&!wardenAwake)wakeWarden(performance.now())
       if(relics.every(r=>r.found)&&same(pos,portal)){finish(true,'Ты вернулся к порталу с древними реликвиями!');return}
     }
     // Raycast from the actual tap position through the same perspective used by WebGL.
@@ -576,8 +576,8 @@
     function enterNewCell(nx,ny){
       if(nx===pos.x&&ny===pos.y)return;
       pos.x=nx;pos.y=ny;moves++;
-      const quiet=crouching||wool.some(w=>same(w,pos));if(!quiet)noise=Math.min(7,noise+1);
-      enterCell();if(done)return;
+      const quiet=crouching||wool.some(w=>same(w,pos));if(!quiet)noise=Math.min(WARDEN_WAKE_NOISE,noise+1);
+      enterCell();if(!wardenAwake&&noise>=WARDEN_WAKE_NOISE)wakeWarden(performance.now());if(done)return;
       if(done)return;
       if(moves>=maxMoves){finish(false,'Закончился лимит пройденных блоков.');return}
       updateHud();if(mapOpen)renderMap();
