@@ -340,7 +340,7 @@ function startParkour(d){
   if(steps===4)accumulator=0;draw();requestAnimationFrame(tick);
  }updateHud();draw();requestAnimationFrame(tick)
 }
-function city(){chooseDifficulty('🏛️ Древний город 7.0: вид от первого лица, найди реликвии и не разбуди Стража',d=>{try{if(typeof window.startCity62==='function')window.startCity62({difficulty:d,makeMaze:randomMaze,field,out,rewardChallenge,ach,btn,challengeFail,changeCoins,clear});else startCity(d)}catch(error){console.error('Древний город 6.2:',error);startCity(d)}})}
+function city(){chooseDifficulty('🏛️ Древний город 7.1: глубинный сланец, скалк и модель Вардена',d=>{try{if(typeof window.startCity62==='function')window.startCity62({difficulty:d,makeMaze:randomMaze,field,out,rewardChallenge,ach,btn,challengeFail,changeCoins,clear});else startCity(d)}catch(error){console.error('Древний город 6.2:',error);startCity(d)}})}
 function startCity(d){
  clear();const token=challengeToken,size=d==='easy'?7:d==='normal'?9:11,turns=d==='easy'?60:d==='normal'?66:70,required=3;
  let moves=turns,found=0,done=false,pos={x:1,y:1};const start={x:1,y:1};
