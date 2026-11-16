@@ -45,7 +45,7 @@
     const relics=reachable.splice(0,required).map(p=>({...p,found:false})),chestCount=difficulty==='easy'?3:difficulty==='hard'?5:4,chests=reachable.splice(0,chestCount).map(p=>({...p,opened:false})),sensorCount=difficulty==='easy'?3:difficulty==='hard'?7:5,sensors=reachable.splice(0,sensorCount).map(p=>({...p,triggered:false})),woolCount=difficulty==='hard'?2:3,wool=reachable.splice(0,woolCount),spawnDistances=distanceMap(map,start);reachable.sort((a,b)=>(spawnDistances.get(b.x+','+b.y)||0)-(spawnDistances.get(a.x+','+a.y)||0));const wardenSpawn={...(reachable.shift()||{x:size-2,y:size-2})};let warden={...wardenSpawn};
     const stats=readStats();stats.runs++;saveStats(stats);let moves=0,health=maxHealth,lantern=difficulty==='hard'?2:3,noise=0,wardenAwake=false,wardenStun=0,wardenStep=0,done=false,crouching=false,mapOpen=false;
     // Smooth first-person camera: the maze remains grid-based, while the view glides between cell centres.
-    let cameraX=pos.x*2+1,cameraZ=pos.y*2+1,cameraYaw=facing*Math.PI/2,cameraBob=0,cameraAnimation=null,cameraFrame=0,queuedAction=null,worldVerts=null,worldDirty=true;
+    let cameraX=pos.x*2+1,cameraZ=pos.y*2+1,cameraYaw=facing*Math.PI/2,cameraPitch=0,cameraBob=0,cameraAnimation=null,cameraFrame=0,queuedAction=null,worldVerts=null,worldDirty=true;
     let wardenMotion=null,wardenAttackAt=0,wardenWakeAt=0,wardenFrame=0,wardenLastFrame=0;
     const wrap=document.createElement('div');wrap.className='city70-wrap';out.append(wrap);
     const hudBox=document.createElement('div');hudBox.className='city70-hud';wrap.append(hudBox);
@@ -63,7 +63,7 @@
     function actionButton(text,aria,fn){const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',aria);b.addEventListener('click',fn);actions.append(b);return b}
     const lanternBtn=actionButton('🔦 Фонарь ×'+lantern,'Использовать душевный фонарь',useLantern),mapBtn=actionButton('🗺️ Карта','Показать карту города',toggleMap),diaryBtn=actionButton('📜 Дневник','Открыть дневник экспедиции',diary);
     const mapPanel=document.createElement('div');mapPanel.className='city70-map';wrap.append(mapPanel);
-    const help=document.createElement('p');help.className='city70-help';help.textContent='Управление: кнопки на экране или свайпы по коридору. Ходьба и повороты теперь плавные. Вперёд/назад — движение, лево/право — поворот. На компьютере — WASD или стрелки. Включи тихий шаг, чтобы не поднимать шум.';wrap.append(help);
+    const help=document.createElement('p');help.className='city70-help';help.textContent='Обзор: проведи пальцем по 3D-окну, чтобы осматриваться в стороны, вверх и вниз. На компьютере зажми левую кнопку мыши и двигай мышь. Вперёд/назад — движение по ближайшему направлению взгляда, лево/право — поворот. WASD или стрелки тоже работают. Включи тихий шаг, чтобы не поднимать шум.';wrap.append(help);
     field.hidden=true;let cssW=360,cssH=300,dpr=1;
     const gl=canvas.getContext('webgl',{alpha:false,antialias:true,depth:true,stencil:false,powerPreference:'low-power'})||canvas.getContext('experimental-webgl',{alpha:false,antialias:true,depth:true,stencil:false});
     let glProgram=null,glBuffer=null,wardenBuffer=null,atlasTexture=null,glReady=false;
@@ -345,7 +345,7 @@
     }
     function drawScene(){
       if(!glReady||done)return;if(!worldVerts||worldDirty){worldVerts=buildWorld();worldDirty=false;gl.bindBuffer(gl.ARRAY_BUFFER,glBuffer);gl.bufferData(gl.ARRAY_BUFFER,worldVerts,gl.DYNAMIC_DRAW)}const yaw=cameraYaw,eye=[cameraX,1.57+cameraBob,cameraZ],target=[eye[0]+Math.sin(yaw),1.57+cameraBob,eye[2]-Math.cos(yaw)];
-      const projection=matPerspective(Math.PI/2.45,canvas.width/canvas.height,.06,55),viewMatrix=matLookAt(eye,target,[0,1,0]),vp=matMultiply(projection,viewMatrix);
+      const lookCos=Math.cos(cameraPitch),lookTarget=[eye[0]+Math.sin(yaw)*lookCos,eye[1]+Math.sin(cameraPitch),eye[2]-Math.cos(yaw)*lookCos],projection=matPerspective(Math.PI/2.45,canvas.width/canvas.height,.06,55),viewMatrix=matLookAt(eye,lookTarget,[0,1,0]),vp=matMultiply(projection,viewMatrix);
       gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(.012,.03,.043,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.useProgram(glProgram);gl.bindBuffer(gl.ARRAY_BUFFER,glBuffer);
       const stride=32,position=gl.getAttribLocation(glProgram,'aPosition'),uv=gl.getAttribLocation(glProgram,'aUV'),tint=gl.getAttribLocation(glProgram,'aTint');
       gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,3,gl.FLOAT,false,stride,0);gl.enableVertexAttribArray(uv);gl.vertexAttribPointer(uv,2,gl.FLOAT,false,stride,12);gl.enableVertexAttribArray(tint);gl.vertexAttribPointer(tint,3,gl.FLOAT,false,stride,20);
@@ -436,14 +436,39 @@
     }
     function step(dx,dy){if(done||token!==window.__city70Token)return false;const nx=pos.x+dx,ny=pos.y+dy;if(!map[ny]||map[ny][nx]!==0){setLog('🪨 Впереди древняя стена. Поищи другой проход.');return false}pos.x=nx;pos.y=ny;moves++;const quiet=crouching||wool.some(w=>same(w,pos));if(!quiet)noise=Math.min(7,noise+1);enterCell();if(done)return true;if(wardenStun>0)wardenStun--;else if(wardenAwake){wardenStep++;if(wardenStep%2===0)wardenMove()}if(done)return true;if(moves>=maxMoves){finish(false,'Закончились шаги.');return true}worldDirty=true;animateCamera(nx*2+1,ny*2+1,cameraYaw,crouching?390:280,'walk');updateHud();if(mapOpen)renderMap();return true}
     function move(direction){runOrQueue(()=>{const sign=direction===1?1:-1,f=DIRS[facing];step(f[0]*sign,f[1]*sign)})}
-    function turn(delta){runOrQueue(()=>{facing=(facing+delta+4)%4;updateHud();animateCamera(cameraX,cameraZ,cameraYaw+delta*Math.PI/2,270,'turn')})}
+    function turn(delta){runOrQueue(()=>{const targetYaw=cameraYaw+delta*Math.PI/2;facing=((Math.round(targetYaw/(Math.PI/2))%4)+4)%4;updateHud();animateCamera(cameraX,cameraZ,targetYaw,270,'turn')})}
     function toggleCrouch(){if(done)return;crouching=!crouching;setLog(crouching?'🤫 Ты крадёшься. Шаги не повышают шум.':'👣 Ты снова идёшь обычным шагом.');updateHud()}
     function useLantern(){if(done||!wardenAwake||wardenStun>0||lantern<=0)return;lantern--;wardenAttackAt=0;wardenStun=4;noise=Math.max(0,noise-2);setLog('🔦 Душевный фонарь ослепил Стража на 4 хода!');updateHud();drawScene()}
     function keyAction(e){if(done||token!==window.__city70Token||e.altKey||e.ctrlKey||e.metaKey||e.repeat)return;const k=e.code;if(k==='ArrowUp'||k==='KeyW'){e.preventDefault();move(1)}else if(k==='ArrowDown'||k==='KeyS'){e.preventDefault();move(-1)}else if(k==='ArrowLeft'||k==='KeyA'){e.preventDefault();turn(-1)}else if(k==='ArrowRight'||k==='KeyD'){e.preventDefault();turn(1)}else if(k==='Space'){e.preventDefault();toggleCrouch()}}
     keyHandler=keyAction;document.addEventListener('keydown',keyHandler);
-    let touchStart=null;canvas.addEventListener('pointerdown',e=>{touchStart={x:e.clientX,y:e.clientY};if(canvas.setPointerCapture)canvas.setPointerCapture(e.pointerId)});
-    canvas.addEventListener('pointerup',e=>{if(!touchStart||done)return;const dx=e.clientX-touchStart.x,dy=e.clientY-touchStart.y;touchStart=null;if(Math.max(Math.abs(dx),Math.abs(dy))<24)return;if(Math.abs(dx)>Math.abs(dy))turn(dx>0?1:-1);else move(dy<0?1:-1)});
-    canvas.addEventListener('pointercancel',()=>{touchStart=null});
+    // Dragging the 3D viewport changes the camera freely; movement stays on the nearest maze direction.
+    let lookDrag=null;
+    canvas.style.touchAction='none';canvas.style.cursor='grab';
+    function syncFacingToView(){const nearest=Math.round(cameraYaw/(Math.PI/2));facing=((nearest%4)+4)%4}
+    canvas.addEventListener('pointerdown',e=>{
+      if(done||!e.isPrimary||(e.pointerType==='mouse'&&e.button!==0))return;
+      if(cameraFrame){if(cameraAnimation&&cameraAnimation.kind==='walk'){cameraX=pos.x*2+1;cameraZ=pos.y*2+1}cancelAnimationFrame(cameraFrame);cameraFrame=0;cameraAnimation=null;cameraBob=0;queuedAction=null}
+      lookDrag={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};
+      canvas.style.cursor='grabbing';
+      if(canvas.setPointerCapture)try{canvas.setPointerCapture(e.pointerId)}catch(_){}
+      e.preventDefault();
+    });
+    canvas.addEventListener('pointermove',e=>{
+      if(!lookDrag||lookDrag.id!==e.pointerId||done)return;
+      const dx=e.clientX-lookDrag.x,dy=e.clientY-lookDrag.y;
+      lookDrag.x=e.clientX;lookDrag.y=e.clientY;
+      if(Math.abs(dx)+Math.abs(dy)<.5)return;
+      lookDrag.moved=true;
+      cameraYaw+=dx*.008;
+      cameraPitch=clamp(cameraPitch-dy*.0065,-.62,.62);
+      syncFacingToView();
+      drawScene();
+      e.preventDefault();
+    });
+    function endLookDrag(e){if(lookDrag&&(!e||lookDrag.id===e.pointerId)){lookDrag=null;canvas.style.cursor='grab'}}
+    canvas.addEventListener('pointerup',endLookDrag);
+    canvas.addEventListener('pointercancel',endLookDrag);
+    canvas.addEventListener('lostpointercapture',endLookDrag);
     function onResize(){resize()}
     window.addEventListener('resize',onResize);window.city70Restart=()=>{if(keyHandler)document.removeEventListener('keydown',keyHandler);if(wardenFrame)cancelAnimationFrame(wardenFrame);wardenFrame=0;window.removeEventListener('resize',onResize);const b=document.querySelector('[data-v5="city"]');if(b)b.click()};
     if(window.visualViewport)window.visualViewport.addEventListener('resize',onResize);
