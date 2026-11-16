@@ -1,4 +1,4 @@
-/* Варденяшка 7.21 — open Ancient City with plazas, ruins and central gateway. */
+/* Варденяшка 7.22 — open Ancient City with plazas, ruins and central gateway. */
 (() => {
   'use strict';
   const STYLE_ID='city70-style';
@@ -87,6 +87,7 @@
     const map=makeAncientCity(size),start={x:Math.floor(size/2),y:Math.floor(size/2)},portal={...start},pos={...start};let facing=DIRS.findIndex(([dx,dy])=>!!(map[start.y+dy]&&map[start.y+dy][start.x+dx]===0));if(facing<0)facing=1;
     const reachable=[];for(let y=1;y<size-1;y++)for(let x=1;x<size-1;x++)if(map[y][x]===0&&!(x===start.x&&y===start.y)&&Math.abs(x-start.x)+Math.abs(y-start.y)>3)reachable.push({x,y});shuffle(reachable);
     const relics=reachable.splice(0,required).map(p=>({...p,found:false})),chestCount=difficulty==='easy'?3:difficulty==='hard'?5:4,chests=reachable.splice(0,chestCount).map(p=>({...p,opened:false})),sensorCount=difficulty==='easy'?3:difficulty==='hard'?7:5,sensors=reachable.splice(0,sensorCount).map(p=>({...p,triggered:false})),woolCount=difficulty==='hard'?2:3,wool=reachable.splice(0,woolCount),spawnDistances=distanceMap(map,start);reachable.sort((a,b)=>(spawnDistances.get(b.x+','+b.y)||0)-(spawnDistances.get(a.x+','+a.y)||0));const wardenSpawn={...(reachable.shift()||{x:size-2,y:size-2})};let warden={...wardenSpawn};
+    const shriekers=reachable.splice(0,difficulty==='easy'?3:5).map(p=>({...p,triggered:false}));
     const stats=readStats();stats.runs++;saveStats(stats);let moves=0,health=maxHealth,lantern=difficulty==='hard'?2:3,noise=0,wardenAwake=false,wardenStun=0,done=false,crouching=false,mapOpen=false;
     // The player moves continuously in world space; grid cells are used only for collisions and discoveries.
     let cameraX=pos.x*2+1,cameraZ=pos.y*2+1,cameraYaw=facing*Math.PI/2,cameraPitch=0,cameraBob=0,cameraAnimation=null,cameraFrame=0,queuedAction=null,worldVerts=null,worldDirty=true;
@@ -375,11 +376,23 @@
       for(const r of relics)if(!r.found){const x=worldX(r.x),z=worldZ(r.y);add(x,.38,z,.34,.48,.28,3,[.42,1,1],0,0);add(x,.68,z,.2,.28,.2,3,[.85,1,1],0,.12)}
       for(const ch of chests)if(!ch.opened){const x=worldX(ch.x),z=worldZ(ch.y);add(x,.22,z,.82,.42,.72,0,[.9,.62,.3],0,0);add(x,.47,z-.01,.82,.13,.72,0,[1,.72,.38],0,0);add(x,.3,z-.37,.12,.12,.04,2,[1,.9,.6],0,0)}
       for(const sensor of sensors)if(!sensor.triggered){const x=worldX(sensor.x),z=worldZ(sensor.y);add(x,.13,z,.58,.26,.58,3,[.45,1,1],0,0);add(x,.29,z,.22,.08,.22,3,[.8,1,1],0,0)}
+      // Sculk shriekers: four ivory prongs surround a glowing dark core.
+      for(const s of shriekers){const x=worldX(s.x),z=worldZ(s.y);add(x,.13,z,.86,.26,.86,3,[.24,.55,.62],0,0);add(x,.29,z,.43,.16,.43,7,[.45,.68,.74],0,0);
+        for(const dx of [-.32,.32])for(const dz of [-.32,.32])add(x+dx,.43,z+dz,.13,.55,.13,6,[.8,.88,.78],0,0);
+      }
+      // Reinforced deepslate: distinct dark reinforced blocks with cyan seams.
       // The iconic reinforced-deepslate gateway towers over the central square.
       const px=worldX(portal.x),pz=worldZ(portal.y);
       for(const side of [-1,1])for(let h=0;h<7;h++)add(px+side*3.1,h+.5,pz+3.2,1.2,1,1.2,0,[.38,.55,.6],0,0);
-      for(let j=-3;j<=3;j++)add(px+j,7.2,pz+3.2,1,.95,1.3,0,[.4,.65,.7],0,0);
+      for(let j=-3;j<=3;j++)add(px+j,7.2,pz+3.2,1,.95,1.3,7,[.55,.72,.8],0,0);
+      for(const side of [-1,1])for(let h=0;h<7;h++)add(px+side*3.1,h+.5,pz+3.2,1.22,1.01,1.22,7,[.58,.73,.78],0,0);
       for(let j=-2;j<=2;j++)add(px+j,6.35,pz+3.2,.7,.45,.85,3,[.25,.72,.8],0,0);
+      // Soul lanterns, ruined columns and extra sculk veins around the plaza.
+      for(const [dx,dz] of [[-7,-5],[7,-5],[-7,5],[7,5]]){
+        add(px+dx,1.1,pz+dz,.65,2.2,.65,0,[.7,.76,.8],0,0);
+        add(px+dx,2.28,pz+dz,.4,.2,.4,3,[.4,1,1],0,0);
+        add(px+dx,2.47,pz+dz,.27,.2,.27,6,[.8,1,1],0,0);
+      }
       for(const [dx,dz] of [[-4,-4],[4,-4],[-4,4],[4,4]]){
         add(px+dx,.7,pz+dz,.75,1.4,.75,0,[.6,.72,.76],0,0);
         add(px+dx,1.48,pz+dz,.34,.2,.34,3,[.55,1,1],0,0);
@@ -502,6 +515,7 @@
     }
     function enterCell(){
       // Chests and relics are collected only by a deliberate tap/click, not by walking over them.
+      const shrieker=shriekers.find(s=>!s.triggered&&same(s,pos));if(shrieker&&!crouching){shrieker.triggered=true;noise=Math.min(WARDEN_WAKE_NOISE,noise+1);setLog('📣 Скалк-крикун завыл! Шум '+noise+'/3.');worldDirty=true}
       const sensor=sensors.find(s=>!s.triggered&&same(s,pos));if(sensor){sensor.triggered=true;noise=Math.min(WARDEN_WAKE_NOISE,noise+1);setLog('🔊 Скалк-сенсор сработал! Шум '+noise+'/3.')}
       if(noise>=WARDEN_WAKE_NOISE&&!wardenAwake)wakeWarden(performance.now())
       if(relics.every(r=>r.found)&&same(pos,portal)){finish(true,'Ты вернулся к порталу с древними реликвиями!');return}
