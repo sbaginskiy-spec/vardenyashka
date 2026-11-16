@@ -1,4 +1,4 @@
-/* Варденяшка 7.16 — continuous first-person movement between Minecraft blocks. */
+/* Варденяшка 7.17 — continuous movement and hold-to-sprint. */
 (() => {
   'use strict';
   const STYLE_ID='city70-style';
@@ -24,11 +24,12 @@
     #v5out .city70-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;max-width:410px;margin:10px auto}
     #v5out .city70-controls button{min-width:0;min-height:54px;padding:8px 4px;border-radius:11px;font-size:15px;font-weight:800;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}#v5out .city70-controls button.is-held{background:linear-gradient(180deg,#267d91,#14516b);border-color:#9af4ff;transform:translateY(2px);box-shadow:0 1px 0 #06131e}
     #v5out .city70-controls .empty{visibility:hidden}
+    #v5out .city70-controls button.sprint-control.is-held{background:linear-gradient(180deg,#388e55,#1a623e);border-color:#b8ffbb}
     #v5out .city70-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:8px 0}
     #v5out .city70-actions button{min-width:0;min-height:46px;padding:7px 4px;font-size:12px;line-height:1.25}
     #v5out .city70-help{margin:8px 0;color:#b7dce2;font-size:12px;line-height:1.5}
     @media(max-width:390px){#v5out .city70-hud{gap:4px}#v5out .city70-stat{padding:6px 3px;font-size:11px}#v5out .city70-stat b{font-size:13px}#v5out .city70-view{height:clamp(270px,44vh,360px)}#v5out .city70-controls button{min-height:58px;font-size:14px}#v5out .city70-actions{gap:5px}#v5out .city70-actions button{font-size:11px}}
-    @media(orientation:landscape) and (max-height:520px){#v5out .city70-view{height:58vh;min-height:210px}#v5out .city70-controls{max-width:560px;grid-template-columns:repeat(5,minmax(0,1fr))}#v5out .city70-controls .empty{display:none}#v5out .city70-controls button{min-height:46px}}
+    @media(orientation:landscape) and (max-height:520px){#v5out .city70-view{height:58vh;min-height:210px}#v5out .city70-controls{max-width:410px;grid-template-columns:repeat(3,minmax(0,1fr))}#v5out .city70-controls button{min-height:46px}}
   `;
   document.head.append(style);
   const STORE='warden_city_v62',baseStats={runs:0,wins:0,relics:0,chests:0};
@@ -46,9 +47,9 @@
     const stats=readStats();stats.runs++;saveStats(stats);let moves=0,health=maxHealth,lantern=difficulty==='hard'?2:3,noise=0,wardenAwake=false,wardenStun=0,wardenStep=0,done=false,crouching=false,mapOpen=false;
     // The player moves continuously in world space; grid cells are used only for collisions and discoveries.
     let cameraX=pos.x*2+1,cameraZ=pos.y*2+1,cameraYaw=facing*Math.PI/2,cameraPitch=0,cameraBob=0,cameraAnimation=null,cameraFrame=0,queuedAction=null,worldVerts=null,worldDirty=true;
-    const heldKeys=new Set(),heldPointers=new Map(),KEY_ACTION={ArrowUp:'forward',KeyW:'forward',ArrowDown:'back',KeyS:'back',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right'};
+    const heldKeys=new Set(),heldPointers=new Map(),KEY_ACTION={ArrowUp:'forward',KeyW:'forward',ArrowDown:'back',KeyS:'back',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ShiftLeft:'sprint',ShiftRight:'sprint'};
     let movementFrame=0,lastMovementTime=0,wallMessageAt=0;
-    const PLAYER_RADIUS=.27,MOVE_SPEED=3.25,TURN_SPEED=2.1;
+    const PLAYER_RADIUS=.27,MOVE_SPEED=3.25,SPRINT_MULTIPLIER=1.7,TURN_SPEED=2.1;
     let wardenMotion=null,wardenAttackAt=0,wardenWakeAt=0,wardenFrame=0,wardenLastFrame=0;
     const wrap=document.createElement('div');wrap.className='city70-wrap';out.append(wrap);
     const hudBox=document.createElement('div');hudBox.className='city70-hud';wrap.append(hudBox);
@@ -60,16 +61,19 @@
     function control(text,aria,fn,cls){const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',aria);if(cls)b.className=cls;b.addEventListener('click',fn);controls.append(b);return b}
     const blank=document.createElement('span');blank.className='empty';controls.append(blank);
     const forwardBtn=control('⬆️ Вперёд','Удерживать для движения вперёд',()=>{},'hold-control');
-    const rightBtn=control('↻ Вправо','Удерживать для плавного поворота направо',()=>{},'hold-control');
+    const sprintBtn=control('🏃 Спринт ×1.7','Удерживать вместе с движением вперёд для ускорения',()=>{},'hold-control sprint-control');
     const leftBtn=control('↶ Влево','Удерживать для плавного поворота налево',()=>{},'hold-control');
     const backBtn=control('⬇️ Назад','Удерживать для движения назад',()=>{},'hold-control');
-    bindHold(forwardBtn,'forward');bindHold(rightBtn,'right');bindHold(leftBtn,'left');bindHold(backBtn,'back');
+    const rightBtn=control('↻ Вправо','Удерживать для плавного поворота направо',()=>{},'hold-control');
+    const blank2=document.createElement('span');blank2.className='empty';controls.append(blank2);
     const crouchBtn=control('🤫 Тихо: выкл','Включить тихий шаг',toggleCrouch);
+    const blank3=document.createElement('span');blank3.className='empty';controls.append(blank3);
+    bindHold(forwardBtn,'forward');bindHold(sprintBtn,'sprint');bindHold(rightBtn,'right');bindHold(leftBtn,'left');bindHold(backBtn,'back');
     const actions=document.createElement('div');actions.className='city70-actions';wrap.append(actions);
     function actionButton(text,aria,fn){const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',aria);b.addEventListener('click',fn);actions.append(b);return b}
     const lanternBtn=actionButton('🔦 Фонарь ×'+lantern,'Использовать душевный фонарь',useLantern),mapBtn=actionButton('🗺️ Карта','Показать карту города',toggleMap),diaryBtn=actionButton('📜 Дневник','Открыть дневник экспедиции',diary);
     const mapPanel=document.createElement('div');mapPanel.className='city70-map';wrap.append(mapPanel);
-    const help=document.createElement('p');help.className='city70-help';help.textContent='Движение: удерживай «Вперёд» или «Назад» — Варденяшка идёт непрерывно и может остановиться между блоками. Удерживай «Влево» или «Вправо» для плавного поворота. На компьютере — удерживай WASD или стрелки. Обзор: проведи пальцем по 3D-окну. Включи тихий шаг, чтобы не поднимать шум.';wrap.append(help);
+    const help=document.createElement('p');help.className='city70-help';help.textContent='Движение: удерживай «Вперёд» или «Назад» — Варденяшка идёт непрерывно и может остановиться между блоками. Удерживай «Влево» или «Вправо» для плавного поворота. Для спринта удерживай «🏃 Спринт» вместе с «Вперёд» (на ПК — W + Shift): скорость ×1.7, в тихом режиме спринт отключён. На компьютере — WASD или стрелки. Обзор: проведи пальцем по 3D-окну. Включи тихий шаг, чтобы не поднимать шум.';wrap.append(help);
     field.hidden=true;let cssW=360,cssH=300,dpr=1;
     const gl=canvas.getContext('webgl',{alpha:false,antialias:true,depth:true,stencil:false,powerPreference:'low-power'})||canvas.getContext('experimental-webgl',{alpha:false,antialias:true,depth:true,stencil:false});
     let glProgram=null,glBuffer=null,wardenBuffer=null,atlasTexture=null,glReady=false;
@@ -421,19 +425,20 @@
     function useLantern(){if(done||!wardenAwake||wardenStun>0||lantern<=0)return;lantern--;wardenAttackAt=0;wardenStun=4;noise=Math.max(0,noise-2);setLog('🔦 Душевный фонарь ослепил Стража на 4 хода!');updateHud();drawScene()}
     function syncFacingToView(){const nearest=Math.round(cameraYaw/(Math.PI/2));facing=((nearest%4)+4)%4}
     function isHeld(action){for(const code of heldKeys)if(KEY_ACTION[code]===action)return true;for(const held of heldPointers.values())if(held===action)return true;return false}
+    function syncSprintButton(){sprintBtn.classList.toggle('is-held',isHeld('sprint'))}
     function hasMovementInput(){return isHeld('forward')||isHeld('back')||isHeld('left')||isHeld('right')}
     function clearHeldInput(){heldKeys.clear();heldPointers.clear();controls.querySelectorAll('button.is-held').forEach(b=>b.classList.remove('is-held'));if(movementFrame)cancelAnimationFrame(movementFrame);movementFrame=0;lastMovementTime=0;if(cameraBob){cameraBob=0;if(!done)drawScene()}}
     function bindHold(button,action){
       button.addEventListener('pointerdown',e=>{
         if(done||!e.isPrimary||(e.pointerType==='mouse'&&e.button!==0))return;
-        e.preventDefault();heldPointers.set(e.pointerId,action);button.classList.add('is-held');
+        e.preventDefault();heldPointers.set(e.pointerId,action);button.classList.add('is-held');if(action==='sprint')syncSprintButton();
         if(button.setPointerCapture)try{button.setPointerCapture(e.pointerId)}catch(_){}
         startMovementLoop();
       });
       const release=e=>{
         if(e&&heldPointers.get(e.pointerId)!==action)return;
         if(e)heldPointers.delete(e.pointerId);
-        if(![...heldPointers.values()].includes(action))button.classList.remove('is-held');
+        if(![...heldPointers.values()].includes(action))button.classList.remove('is-held');if(action==='sprint')syncSprintButton();
       };
       button.addEventListener('pointerup',release);button.addEventListener('pointercancel',release);button.addEventListener('lostpointercapture',release);
       button.addEventListener('contextmenu',e=>e.preventDefault());
@@ -465,7 +470,8 @@
       const forwardDir=(isHeld('forward')?1:0)-(isHeld('back')?1:0);
       let moved=false,blocked=false;
       if(forwardDir&&dt>0){
-        const distance=MOVE_SPEED*forwardDir*dt,dx=Math.sin(cameraYaw)*distance,dz=-Math.cos(cameraYaw)*distance;
+        const sprinting=forwardDir>0&&!crouching&&isHeld('sprint');
+        const speed=MOVE_SPEED*(sprinting?SPRINT_MULTIPLIER:1),distance=speed*forwardDir*dt,dx=Math.sin(cameraYaw)*distance,dz=-Math.cos(cameraYaw)*distance;
         const oldX=cameraX,oldZ=cameraZ;
         const candidateX=cameraX+dx;if(canOccupy(candidateX,cameraZ))cameraX=candidateX;else blocked=true;
         const candidateZ=cameraZ+dz;if(canOccupy(cameraX,candidateZ))cameraZ=candidateZ;else blocked=true;
@@ -477,7 +483,7 @@
         }
       }
       if(blocked&&now-wallMessageAt>900){setLog('🪨 Впереди древняя стена. Поищи другой проход.');wallMessageAt=now}
-      cameraBob=moved?Math.sin(now*.014)*(crouching?.012:.026):0;
+      cameraBob=moved?Math.sin(now*(forwardDir>0&&!crouching&&isHeld('sprint')?.021:.014))*(crouching?.012:.026):0;
       if(turnDir||moved)drawScene();
       movementFrame=requestAnimationFrame(movementTick);
     }
@@ -485,10 +491,10 @@
     function keyDown(e){
       if(done||token!==window.__city70Token||e.altKey||e.ctrlKey||e.metaKey)return;
       const target=e.target;if(target&&(target.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)))return;
-      if(KEY_ACTION[e.code]){e.preventDefault();if(!e.repeat){heldKeys.add(e.code);startMovementLoop()}}
+      if(KEY_ACTION[e.code]){e.preventDefault();if(!e.repeat){heldKeys.add(e.code);if(KEY_ACTION[e.code]==='sprint')syncSprintButton();startMovementLoop()}}
       else if(e.code==='Space'&&!e.repeat){e.preventDefault();toggleCrouch()}
     }
-    function keyUp(e){if(KEY_ACTION[e.code]){heldKeys.delete(e.code);e.preventDefault()}}
+    function keyUp(e){if(KEY_ACTION[e.code]){heldKeys.delete(e.code);if(KEY_ACTION[e.code]==='sprint')syncSprintButton();e.preventDefault()}}
     keyHandler=keyDown;keyUpHandler=keyUp;document.addEventListener('keydown',keyHandler);document.addEventListener('keyup',keyUpHandler);window.addEventListener('blur',clearHeldInput);
     // Dragging the 3D viewport changes the camera freely; movement stays on the nearest maze direction.
     let lookDrag=null;
