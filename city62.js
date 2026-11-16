@@ -197,7 +197,7 @@
       const motion=wardenMotion,walking=!!motion&&motion.phase!=='retreat';
       const gait=walking?Math.sin((time-motion.started)/92):0;
       const attack=wardenAttackAt?Math.max(0,1-(time-wardenAttackAt)/620):0;
-      const stunned=wardenAwake&&wardenStun>0;
+      const stunned=wardenAwake&&wardenStun>0&&attack<.08;
       const shake=stunned?Math.sin(time/34)*.075:0;
       const headYaw=stunned?Math.sin(time/48)*.17:Math.sin(time/1050)*.085;
       const breathe=Math.sin(time/(wardenAwake?330:1050))*(wardenAwake?.025:.012);
@@ -438,7 +438,7 @@
     function move(direction){runOrQueue(()=>{const sign=direction===1?1:-1,f=DIRS[facing];step(f[0]*sign,f[1]*sign)})}
     function turn(delta){runOrQueue(()=>{facing=(facing+delta+4)%4;updateHud();animateCamera(cameraX,cameraZ,cameraYaw+delta*Math.PI/2,270,'turn')})}
     function toggleCrouch(){if(done)return;crouching=!crouching;setLog(crouching?'🤫 Ты крадёшься. Шаги не повышают шум.':'👣 Ты снова идёшь обычным шагом.');updateHud()}
-    function useLantern(){if(done||!wardenAwake||wardenStun>0||lantern<=0)return;lantern--;wardenStun=4;noise=Math.max(0,noise-2);setLog('🔦 Душевный фонарь ослепил Стража на 4 хода!');updateHud();drawScene()}
+    function useLantern(){if(done||!wardenAwake||wardenStun>0||lantern<=0)return;lantern--;wardenAttackAt=0;wardenStun=4;noise=Math.max(0,noise-2);setLog('🔦 Душевный фонарь ослепил Стража на 4 хода!');updateHud();drawScene()}
     function keyAction(e){if(done||token!==window.__city70Token||e.altKey||e.ctrlKey||e.metaKey||e.repeat)return;const k=e.code;if(k==='ArrowUp'||k==='KeyW'){e.preventDefault();move(1)}else if(k==='ArrowDown'||k==='KeyS'){e.preventDefault();move(-1)}else if(k==='ArrowLeft'||k==='KeyA'){e.preventDefault();turn(-1)}else if(k==='ArrowRight'||k==='KeyD'){e.preventDefault();turn(1)}else if(k==='Space'){e.preventDefault();toggleCrouch()}}
     keyHandler=keyAction;document.addEventListener('keydown',keyHandler);
     let touchStart=null;canvas.addEventListener('pointerdown',e=>{touchStart={x:e.clientX,y:e.clientY};if(canvas.setPointerCapture)canvas.setPointerCapture(e.pointerId)});
