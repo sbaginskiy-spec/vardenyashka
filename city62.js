@@ -48,7 +48,7 @@
     const hudBox=document.createElement('div');hudBox.className='city70-hud';wrap.append(hudBox);
     const view=document.createElement('div');view.className='city70-view';wrap.append(view);
     const canvas=document.createElement('canvas');canvas.className='city70-canvas';canvas.setAttribute('aria-label','Трёхмерный вид от первого лица: коридоры Древнего города');view.append(canvas);
-    const ctx=canvas.getContext('2d');const label=document.createElement('div');label.className='city70-view-label';label.textContent='👁️ ВИД ОТ ПЕРВОГО ЛИЦА · 2D';view.append(label);
+    const label=document.createElement('div');label.className='city70-view-label';label.textContent='🎮 3D · WebGL · ДРЕВНИЙ ГОРОД';view.append(label);
     const log=document.createElement('div');log.className='city70-log';log.setAttribute('aria-live','polite');log.textContent='🏛️ Ты вошёл в Древний город. Найди реликвии и вернись к порталу.';wrap.append(log);
     const controls=document.createElement('div');controls.className='city70-controls';wrap.append(controls);
     function control(text,aria,fn,cls){const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',aria);if(cls)b.className=cls;b.addEventListener('click',fn);controls.append(b);return b}
@@ -62,7 +62,7 @@
     const mapPanel=document.createElement('div');mapPanel.className='city70-map';wrap.append(mapPanel);
     const help=document.createElement('p');help.className='city70-help';help.textContent='Управление: кнопки на экране или свайпы по коридору. Вперёд/назад — движение, лево/право — поворот. На компьютере — WASD или стрелки. Включи тихий шаг, чтобы не поднимать шум.';wrap.append(help);
     field.hidden=true;let cssW=360,cssH=300,dpr=1;
-    const gl=canvas.getContext('webgl',{alpha:false,antialias:true,depth:true,stencil:false,powerPreference:'low-power'});
+    const gl=canvas.getContext('webgl',{alpha:false,antialias:true,depth:true,stencil:false,powerPreference:'low-power'})||canvas.getContext('experimental-webgl',{alpha:false,antialias:true,depth:true,stencil:false});
     let glProgram=null,glBuffer=null,atlasTexture=null,glReady=false;
     label.textContent='🎮 3D · WebGL · ДРЕВНИЙ ГОРОД';
     function compileShader(type,source){
