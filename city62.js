@@ -71,51 +71,94 @@
       return sh;
     }
     function makeAtlas(){
-      // Six 32x32 nearest-neighbour pixel-art tiles.
-      const T=32,atlas=document.createElement('canvas');atlas.width=256;atlas.height=32;
+      // Eight 64x64 nearest-neighbour pixel-art tiles.
+      const T=64,atlas=document.createElement('canvas');atlas.width=T*8;atlas.height=T;
       const c=atlas.getContext('2d');c.imageSmoothingEnabled=false;
-      const px=(tile,x,y,color)=>{c.fillStyle=color;c.fillRect(tile*T+x,y,1,1)};
+      const px=(tile,x,y,color)=>{if(x<0||x>=T||y<0||y>=T)return;c.fillStyle=color;c.fillRect(tile*T+x,y,1,1)};
       const rect=(tile,x,y,w,h,color)=>{c.fillStyle=color;c.fillRect(tile*T+x,y,w,h)};
-      const noise=(tile,base,colors,seed,rate)=>{rect(tile,0,0,T,T,base);for(let y=0;y<T;y++)for(let x=0;x<T;x++){const n=(x*37+y*19+x*y*11+seed)%rate;if(n<colors.length)px(tile,x,y,colors[n])}};
-      // 0: deepslate bricks.
+      const noise=(tile,base,colors,seed,rate)=>{
+        rect(tile,0,0,T,T,base);
+        for(let y=0;y<T;y++)for(let x=0;x<T;x++){
+          const n=(x*37+y*19+x*y*11+seed)%rate;
+          if(n<colors.length)px(tile,x,y,colors[n]);
+        }
+      };
+      // 0: deep-slate bricks, with 16-pixel staggered blocks and crisp mortar.
       rect(0,0,0,T,T,'#202c32');
       for(let row=0;row<8;row++){
-        const y=row*4,offset=row%2?0:4;rect(0,0,y,T,1,'#111b21');
-        for(let col=0;col<4;col++){const x=col*8+offset;rect(0,x,y+1,7,3,['#35464d','#2d3e45','#3a4a50','#293940'][row%4]);rect(0,x+1,y+1,4,1,'#40535a');rect(0,x,y+3,7,1,'#1b292f');px(0,x+5,y+2,'#26363d');px(0,x+6,y+1,'#465960')}
-        rect(0,0,y+1,1,3,'#111b21');if(offset===0)rect(0,16,y+1,1,3,'#111b21');
+        const y=row*8,offset=row%2?0:8;
+        rect(0,0,y,T,2,'#111b21');
+        for(let col=-1;col<5;col++){
+          const x=col*16+offset;
+          if(x>=T||x+15<0)continue;
+          rect(0,x,y+2,15,5,['#35464d','#2d3e45','#3a4a50','#293940'][row%4]);
+          rect(0,x+1,y+2,11,1,'#40535a');
+          rect(0,x,y+6,15,1,'#1b292f');
+          rect(0,x+12,y+3,2,1,'#26363d');
+          px(0,x+14,y+2,'#465960');
+        }
       }
-      // 1: polished deepslate.
-      noise(1,'#303f46',['#35474e','#293940','#40545b','#2c3c43'],17,41);
-      for(let i=0;i<18;i++){const x=(i*13+3)%30,y=(i*19+5)%30;px(1,x,y,'#53656b');if(i%3===0)px(1,x+1,y,'#3d5057')}
-      rect(1,4,5,8,1,'#3c5057');rect(1,5,6,5,1,'#35474e');rect(1,19,22,8,1,'#26373e');
-      // 2: chiseled deepslate.
-      rect(2,0,0,T,T,'#1b292f');rect(2,1,1,30,30,'#34464d');rect(2,2,2,28,28,'#2b3c43');
-      rect(2,3,3,26,2,'#4b5e65');rect(2,3,5,2,22,'#40545b');rect(2,5,27,22,2,'#18262c');rect(2,27,5,2,22,'#17252b');
-      rect(2,7,8,18,16,'#26383f');rect(2,9,10,14,12,'#30434a');rect(2,11,12,10,8,'#293b42');
-      for(let i=0;i<8;i++)px(2,8+i*2,9+(i%3),'#465a61');
-      // 3: sculk.
-      noise(3,'#09272d',['#103a40','#16484b','#0d3137','#0b3036','#124047'],13,37);
-      const veins=[[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[10,11],[11,12],[12,13],[22,3],[21,4],[20,5],[19,6],[18,7],[17,8],[16,9],[15,10],[14,11],[13,12],[5,25],[6,24],[7,23],[8,22],[9,21],[24,23],[23,22],[22,21],[21,20]];
-      for(const [x,y] of veins)px(3,x,y,'#17615e');
-      for(const [x,y] of [[4,5],[8,9],[20,5],[16,9],[7,23],[22,21],[13,12],[25,12],[11,27]]){rect(3,x,y,2,2,'#238b83');px(3,x,y,'#79e8d7');px(3,x+1,y+1,'#15534f')}
-      // 4: Warden skin — the recognizable dark teal / muted turquoise Minecraft palette.
-      noise(4,'#244b49',['#1b3e40','#2b5652','#315d57','#17373a','#3b6960','#204744','#142f34'],29,47);
-      // Irregular dark patches on the hide, with restrained mossy-teal highlights.
-      for(const [x,y] of [[3,5],[4,5],[5,6],[6,7],[7,7],[8,8],[23,4],[24,5],[25,6],[26,7],[27,8],[22,9],[5,22],[6,23],[7,24],[8,25],[23,22],[24,23],[25,24],[26,25],[13,3],[14,4],[17,27],[18,28]]){px(4,x,y,'#102c32');if(x<29)px(4,x+1,y,'#193a3b')}
-      for(const [x,y] of [[10,4],[11,5],[20,5],[21,6],[4,17],[5,18],[26,17],[27,18],[14,25],[15,26],[19,11],[20,12]])px(4,x,y,'#47766a');
-      for(const [x,y] of [[2,13],[29,14],[11,29],[20,2],[16,18],[8,13]])px(4,x,y,'#5b8574')
-      // 5: a simple cyan soul-core, used only on the small chest organ.
-      rect(5,0,0,T,T,'#0b252d');rect(5,3,3,26,26,'#123943');rect(5,5,5,22,22,'#0b2b34');
-      rect(5,11,7,10,18,'#155b61');rect(5,12,8,8,16,'#218b89');rect(5,14,9,4,14,'#4bc9bd');
-      rect(5,15,10,2,12,'#8bf5e7');rect(5,13,8,6,2,'#68e2d3');rect(5,13,23,6,2,'#176c70');
-      px(5,12,7,'#69e4d6');px(5,19,7,'#69e4d6');px(5,12,24,'#176c70');px(5,19,24,'#176c70');
-      // 6: pale muted sage-grey rib plates, as on the original Warden.
-      noise(6,'#788879',['#8e9883','#9da18a','#657b78','#526b6c','#a5a58c','#71847c'],7,31);
-      for(let y=2;y<30;y+=5){rect(6,2,y,28,1,'#4e6668');rect(6,3,y+1,26,2,'#929984');rect(6,4,y+3,24,1,'#667a75')}
-      for(const [x,y] of [[5,4],[9,9],[14,3],[21,7],[26,13],[7,21],[18,25],[25,27],[12,16],[29,4]])px(6,x,y,'#b0ae91');
-      // 7: deep blue-black hide for the body, contrasting with teal horns and pale ribs.
-      noise(7,'#101923',['#14232e','#0b151e','#182b36','#0e1d28','#1c3039','#101b25','#203540'],19,43);
-      for(const [x,y] of [[3,5],[4,6],[5,7],[24,4],[25,5],[26,6],[8,22],[9,23],[22,24],[23,25],[14,3],[17,28]]){px(7,x,y,'#263e47');if(x<29)px(7,x+1,y,'#152631')}
+      // Fine chips and mineral flecks in the brick faces.
+      for(let i=0;i<70;i++){
+        const x=(i*17+5)%64,y=(i*29+7)%64;
+        px(0,x,y,i%3===0?'#53656b':i%3===1?'#263940':'#31434a');
+      }
+      // 1: polished deepslate, smoother broad patches with fine 64px grain.
+      noise(1,'#303f46',['#35474e','#293940','#40545b','#2c3c43','#34464c'],23,89);
+      for(let i=0;i<28;i++){
+        const x=(i*19+3)%58,y=(i*31+5)%58;
+        rect(1,x,y,2+(i%4),1+(i%2),i%3===0?'#53656b':i%3===1?'#3d5057':'#26373e');
+      }
+      rect(1,7,10,20,2,'#3c5057');rect(1,9,12,13,1,'#35474e');
+      rect(1,38,45,17,2,'#26373e');rect(1,40,47,10,1,'#40545b');
+      // 2: chiseled deepslate with a layered square relief.
+      rect(2,0,0,T,T,'#1b292f');rect(2,2,2,60,60,'#34464d');rect(2,4,4,56,56,'#2b3c43');
+      rect(2,6,6,52,3,'#4b5e65');rect(2,6,9,3,46,'#40545b');
+      rect(2,9,55,46,3,'#18262c');rect(2,55,9,3,46,'#17252b');
+      rect(2,14,15,36,34,'#26383f');rect(2,17,18,30,28,'#30434a');
+      rect(2,21,22,22,20,'#293b42');rect(2,24,25,16,14,'#24353c');
+      rect(2,28,29,8,6,'#3c5056');
+      for(let i=0;i<16;i++){px(2,14+i*2,16+(i%4),'#465a61');px(2,13+(i*7)%38,48+(i%3),'#1c2c32')}
+      // 3: sculk, branching teal veins and luminous cyan growth.
+      noise(3,'#09272d',['#103a40','#16484b','#0d3137','#0b3036','#124047','#0b222a'],31,79);
+      const veins=[[5,7],[7,9],[9,11],[11,13],[13,15],[15,17],[17,19],[19,21],[21,23],[23,25],[25,27],[27,29],[29,31],[31,33],[33,35],[35,37],[37,39],[39,41],[41,43],[43,45],[45,47],[47,49],[49,51],[51,53],[53,55],[55,57],[57,59],[59,61],[57,7],[55,9],[53,11],[51,13],[49,15],[47,17],[45,19],[43,21],[41,23],[39,25],[37,27],[35,29],[33,31],[31,33],[29,35],[27,37],[25,39],[23,41],[21,43],[19,45],[17,47],[15,49],[13,51],[11,53],[9,55],[7,57]];
+      for(const [x,y] of veins){px(3,x,y,'#17615e');if(x+1<64)px(3,x+1,y,'#124a4a')}
+      for(const [x,y] of [[8,10],[16,18],[24,26],[32,34],[40,42],[48,50],[56,58],[56,10],[48,18],[40,26],[32,34],[24,42],[16,50],[8,58],[12,31],[51,33]]){
+        rect(3,x,y,3,3,'#238b83');px(3,x,y,'#79e8d7');px(3,x+1,y+1,'#15534f');
+      }
+      // 4: Warden's muted turquoise hide and crown/horn accents.
+      noise(4,'#244b49',['#1b3e40','#2b5652','#315d57','#17373a','#3b6960','#204744','#142f34'],37,83);
+      for(const [x,y] of [[5,8],[7,9],[9,11],[11,13],[13,14],[15,16],[17,18],[19,20],[21,22],[23,24],[25,26],[27,28],[47,6],[49,8],[51,10],[53,12],[55,14],[57,16],[43,50],[45,52],[47,54],[49,56],[51,58],[9,46],[11,48],[13,50],[15,52],[17,54],[19,56]]){
+        px(4,x,y,'#102c32');if(x<63)px(4,x+1,y,'#193a3b');
+      }
+      for(const [x,y] of [[12,8],[14,10],[40,10],[42,12],[8,34],[10,36],[52,34],[54,36],[28,50],[30,52],[38,22],[40,24],[18,30],[46,44]]){
+        rect(4,x,y,2,2,'#47766a');
+      }
+      for(const [x,y] of [[4,26],[58,28],[22,58],[40,4],[32,36],[16,26],[48,18],[8,44]])px(4,x,y,'#5b8574');
+      // 5: bright cyan soul core, with a sharp layered centre.
+      rect(5,0,0,T,T,'#0b252d');rect(5,5,5,54,54,'#123943');rect(5,9,9,46,46,'#0b2b34');
+      rect(5,20,13,24,38,'#155b61');rect(5,22,15,20,34,'#218b89');
+      rect(5,26,17,12,30,'#4bc9bd');rect(5,29,19,6,26,'#8bf5e7');
+      rect(5,24,15,16,3,'#68e2d3');rect(5,24,46,16,3,'#176c70');
+      rect(5,17,23,4,18,'#176c70');rect(5,43,23,4,18,'#176c70');
+      for(let i=0;i<12;i++){px(5,14+i*3,10+(i%3),'#69e4d6');px(5,13+(i*7)%38,51+(i%4),'#176c70')}
+      // 6: pale muted sage-grey rib plates, layered like the original Warden.
+      noise(6,'#788879',['#8e9883','#9da18a','#657b78','#526b6c','#a5a58c','#71847c'],11,61);
+      for(let y=4;y<64;y+=10){
+        rect(6,3,y,58,2,'#4e6668');rect(6,5,y+2,54,4,'#929984');
+        rect(6,7,y+6,50,2,'#667a75');rect(6,9,y+3,46,1,'#b0ae91');
+      }
+      for(const [x,y] of [[10,8],[18,18],[28,6],[42,14],[52,26],[14,42],[36,50],[50,54],[24,32],[58,8],[6,56],[44,38],[30,58]]){
+        rect(6,x,y,2,2,'#b0ae91');
+      }
+      // 7: deep blue-black hide for the body, contrasting with turquoise horns and pale ribs.
+      noise(7,'#101923',['#14232e','#0b151e','#182b36','#0e1d28','#1c3039','#101b25','#203540'],29,73);
+      for(const [x,y] of [[6,8],[8,10],[10,12],[12,14],[14,16],[16,18],[18,20],[20,22],[22,24],[24,26],[26,28],[28,30],[48,6],[50,8],[52,10],[54,12],[56,14],[58,16],[16,48],[18,50],[20,52],[22,54],[24,56],[26,58],[42,46],[44,48],[46,50]]){
+        px(7,x,y,'#263e47');if(x<63)px(7,x+1,y,'#152631');
+      }
+      for(const [x,y] of [[12,28],[14,30],[16,32],[48,30],[50,32],[52,34],[24,44],[26,46],[38,12],[40,14],[32,56]]){
+        px(7,x,y,'#203d45');
+      }
       return atlas;
     }
     function initGL(){
@@ -142,7 +185,7 @@
     function matMultiply(a,b){const o=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];return o}
     function resize(){const r=view.getBoundingClientRect();cssW=Math.max(280,Math.floor(r.width||360));cssH=Math.max(250,Math.floor(r.height||300));dpr=Math.min(2,Math.max(1,window.devicePixelRatio||1));canvas.width=Math.floor(cssW*dpr);canvas.height=Math.floor(cssH*dpr);canvas.style.width='100%';canvas.style.height='100%';if(glReady){gl.viewport(0,0,canvas.width,canvas.height);drawScene()}}
     function addCube(out,cx,cy,cz,sx,sy,sz,type,tint,yaw,rz){
-      const tile=Number.isInteger(type)&&type>=0&&type<=7?type:0,u0=(tile*32+.5)/256,u1=((tile+1)*32-.5)/256,v0=.5/32,v1=31.5/32;
+      const tile=Number.isInteger(type)&&type>=0&&type<=7?type:0,u0=(tile*64+.5)/512,u1=((tile+1)*64-.5)/512,v0=.5/64,v1=63.5/64;
       const faces=[{p:[[-.5,-.5,-.5],[.5,-.5,-.5],[.5,.5,-.5],[-.5,.5,-.5]],l:.88},{p:[[.5,-.5,.5],[-.5,-.5,.5],[-.5,.5,.5],[.5,.5,.5]],l:.68},{p:[[-.5,.5,-.5],[.5,.5,-.5],[.5,.5,.5],[-.5,.5,.5]],l:1.18},{p:[[-.5,-.5,.5],[.5,-.5,.5],[.5,-.5,-.5],[-.5,-.5,-.5]],l:.48},{p:[[-.5,-.5,.5],[-.5,-.5,-.5],[-.5,.5,-.5],[-.5,.5,.5]],l:.76},{p:[[.5,-.5,-.5],[.5,-.5,.5],[.5,.5,.5],[.5,.5,-.5]],l:.98}],uv=[[u0,v0],[u1,v0],[u1,v1],[u0,v1]],order=[0,1,2,0,2,3],co=Math.cos(yaw||0),si=Math.sin(yaw||0),cr=Math.cos(rz||0),sr=Math.sin(rz||0),base=tint||[1,1,1];
       for(const face of faces)for(const idx of order){const p=face.p[idx];let x=p[0]*sx,y=p[1]*sy,z=p[2]*sz;const rx=x*cr-y*sr,ry=x*sr+y*cr,wx=cx+rx*co+z*si,wz=cz-rx*si+z*co,t=uv[idx];out.push(wx,cy+ry,wz,t[0],t[1],base[0]*face.l,base[1]*face.l,base[2]*face.l)}
     }
@@ -203,14 +246,14 @@
       // Each maze cell becomes a 2x2 Minecraft-style block bay, so corridors have room to read as spaces.
       for(let y=0;y<size;y++)for(let x=0;x<size;x++){
         const cx=worldX(x),cz=worldZ(y);
-        // Tile floors and ceilings as individual one-metre blocks so 16x16 pixels never stretch across a large slab.
+        // Tile floors and ceilings as individual one-metre blocks so 64x64 pixels never stretch across a large slab.
         for(let by=0;by<2;by++)for(let bx=0;bx<2;bx++){
           const tx=cx+(bx-.5),tz=cz+(by-.5);
           add(tx,-.075,tz,1,.15,1,(x+y+bx+by)%4===0?2:1,[.76,.82,.83],0,0);
         }
         if(map[y][x]===1){
           // A wall cell is a 2x3x2 arrangement of real 1x1x1 blocks.
-          // Each block gets its own complete 16x16 texture instead of stretching one tile over a 2x2x2.86 cube.
+          // Each block gets its own complete 64x64 texture instead of stretching one tile over a 2x2x2.86 cube.
           for(let by=0;by<3;by++)for(let bz=0;bz<2;bz++)for(let bx=0;bx<2;bx++){
             const tx=cx+(bx-.5),tz=cz+(bz-.5),variant=(x*7+y*11+bx*3+bz+by)%9;
             const material=variant===0?2:variant===4?1:0;
