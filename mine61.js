@@ -19,6 +19,20 @@
     {id:'spider',name:'Паук',icon:'🕷️',hp:2,damage:1},
     {id:'slime',name:'Слизень',icon:'🟢',hp:2,damage:1}
   ];
+  const DROPS = [
+    {id:'flesh',name:'Гнилая плоть',icon:'🥩',from:'zombie'},
+    {id:'bone',name:'Кость',icon:'🦴',from:'skeleton'},
+    {id:'powder',name:'Порох',icon:'💣',from:'creeper'},
+    {id:'string',name:'Нить',icon:'🧵',from:'spider'},
+    {id:'slimeball',name:'Сгусток слизи',icon:'🟢',from:'slime'}
+  ];
+  const RECIPES = [
+    {id:'potion',name:'Зелье лечения',icon:'🧪',desc:'Восстанавливает 5 здоровья в шахте',cost:{bone:1,lapis:1}},
+    {id:'bomb',name:'Бомба',icon:'💣',desc:'Наносит мобу 3 урона',cost:{powder:1,redstone:1}},
+    {id:'net',name:'Ловчая сеть',icon:'🕸️',desc:'Один раз отменяет ответный удар моба',cost:{string:2,slimeball:1}},
+    {id:'pickaxe',name:'Железная кирка',icon:'⛏️',desc:'Даёт +1 урон обычным ударам в одном походе',cost:{iron:3,coal:2}},
+    {id:'armor',name:'Алмазная броня',icon:'🛡️',desc:'Добавляет 3 щита в следующей шахте',cost:{diamond:1,iron:2}}
+  ];
   const style = document.createElement('style');
   style.id = 'mine61-style';
   style.textContent = `
@@ -47,7 +61,7 @@
   .mine61-collection{border:1px solid #437383;border-radius:10px;padding:9px;background:#092533;margin-top:9px}
   .mine61-collection-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;font-size:12px;margin-top:6px}
   .mine61-collection-grid span{padding:6px;background:#153647;border-radius:5px}
-  .mine61-result{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+  .mine61-result{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}\n  .mine61-recipe{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-top:1px solid #315568}\n  .mine61-recipe button{min-width:86px;min-height:40px;border-radius:9px;background:#225b48;color:#eafff3;border:1px solid #6ac49b}\n  .mine61-recipe button:disabled{opacity:.45}\n  .mine61-recipe p{margin:4px 0 0}
   @media(max-width:420px){#v5field.mine61-grid{gap:3px!important;padding:6px!important}#v5field.mine61-grid .mine61-cell{font-size:17px!important;border-width:1px!important}}
   `;
   document.head.append(style);
@@ -55,7 +69,7 @@
   function readCollection() {
     let data = {};
     try { data = JSON.parse(localStorage.getItem(STORAGE) || '{}') || {}; } catch (_) {}
-    return {ores:{...Object.fromEntries(ORES.map(o=>[o.id,0])),...(data.ores||{})},runs:Number(data.runs)||0,wins:Number(data.wins)||0,mobs:Number(data.mobs)||0};
+    return {ores:{...Object.fromEntries(ORES.map(o=>[o.id,0])),...(data.ores||{})},drops:{...Object.fromEntries(DROPS.map(o=>[o.id,0])),...(data.drops||{})},items:{potion:0,bomb:0,net:0,pickaxe:0,armor:0,...(data.items||{})},crafted:{...(data.crafted||{})},runs:Number(data.runs)||0,wins:Number(data.wins)||0,mobs:Number(data.mobs)||0};
   }
   function writeCollection(data) {try {localStorage.setItem(STORAGE,JSON.stringify(data));} catch (_) {}}
   function shuffle(arr) {for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}return arr;}
@@ -77,12 +91,17 @@
     while(layout.length<total)layout.push({kind:'rock'});
     shuffle(layout);
     let hp=settings.hp,torches=settings.torches,shields=settings.shields,found=0,points=0,defeated=0,ended=false,battle=null,torchMode=false;
-    let battleActions=[];
+    let battleActions=[],workshopOpen=false,bonusPickaxe=data.items.pickaxe>0;
+    if(bonusPickaxe)data.items.pickaxe--;
+    if(data.items.armor>0){data.items.armor--;shields+=3;}
+    writeCollection(data);
 
     const hud=document.createElement('div');hud.className='adventure-info mine61-top';out.append(hud);
     const toolbar=document.createElement('div');toolbar.className='mine61-toolbar';out.append(toolbar);
     const torchBtn=document.createElement('button');torchBtn.type='button';toolbar.append(torchBtn);
-    const collectionBtn=document.createElement('button');collectionBtn.type='button';collectionBtn.textContent='🎒 Коллекция';toolbar.append(collectionBtn);
+    const collectionBtn=document.createElement('button');collectionBtn.type='button';collectionBtn.textContent='🎒 Рюкзак';toolbar.append(collectionBtn);
+    const workshopBtn=document.createElement('button');workshopBtn.type='button';workshopBtn.textContent='🛠️ Мастерская';toolbar.append(workshopBtn);
+    const potionBtn=document.createElement('button');potionBtn.type='button';toolbar.append(potionBtn);
     const hint=document.createElement('p');hint.className='mine61-hint';hint.textContent='⛏️ Нажимай на камень, чтобы добывать руду. 🔦 Факел подсвечивает соседние блоки. Мобы нападают — сражайся или защищайся!';out.append(hint);
     const message=document.createElement('p');message.className='mine61-message';message.setAttribute('aria-live','polite');out.append(message);
     const battleBox=document.createElement('div');battleBox.className='mine61-battle';battleBox.hidden=true;out.append(battleBox);
@@ -93,7 +112,7 @@
       const b=document.createElement('button');b.type='button';b.className='mine61-cell';b.setAttribute('aria-label','Раскопать блок '+(i+1));
       b.addEventListener('click',()=>tapCell(i));field.append(b);cells.push({type:cell,button:b,open:false,peek:false});return b;
     });
-    function hudUpdate(){hud.innerHTML=`<strong>❤️ ${hp}/${settings.hp} · ⛏️ ${found}/${settings.goal}</strong><span>💎 Очки руды: ${points} · 🛡️ ${shields} · 🔦 ${torches}</span>`;torchBtn.textContent=(torchMode?'✓ ':'')+'🔦 Факел ×'+torches;torchBtn.classList.toggle('active',torchMode);torchBtn.disabled=torches===0||!!battle||ended;}
+    function hudUpdate(){hud.innerHTML=`<strong>❤️ ${hp}/${settings.hp} · ⛏️ ${found}/${settings.goal}</strong><span>💎 Очки: ${points} · 🛡️ ${shields} · 🔦 ${torches}</span>`;torchBtn.textContent=(torchMode?'✓ ':'')+'🔦 Факел ×'+torches;torchBtn.classList.toggle('active',torchMode);torchBtn.disabled=torches===0||!!battle||ended;potionBtn.textContent='🧪 Зелье ×'+data.items.potion;potionBtn.disabled=!data.items.potion||hp>=settings.hp||ended||!!battle;}
     function log(text){message.textContent=text;}
     function revealVisual(cell){const {type,button:b}=cell;cell.open=true;b.disabled=true;b.classList.add('mine61-open');b.classList.remove('mine61-peek');
       if(type.kind==='ore'){b.classList.add('mine61-ore');b.style.setProperty('--ore',type.value.color);b.textContent=type.value.icon;b.title=type.value.name;b.setAttribute('aria-label',type.value.name);}
@@ -124,27 +143,30 @@
       const stats=document.createElement('div');const strong=document.createElement('strong');strong.textContent='⚔️ '+battle.name;const p=document.createElement('div');p.textContent='❤️ Враг: '+battle.hp+' · Твоё здоровье: '+hp;stats.append(strong,p);head.append(avatar,stats);battleBox.append(head);
       const actions=document.createElement('div');actions.className='mine61-battle-actions';battleBox.append(actions);
       battleActions=[];
-      [['⚔️ Удар', 'attack'],['🛡️ Щит ('+shields+')','shield'],['💨 Уклониться','dodge']].forEach(([label,action])=>{
-        const b=document.createElement('button');b.type='button';b.textContent=label;b.disabled=action==='shield'&&shields===0;b.onclick=()=>combat(action);actions.append(b);battleActions.push(b);
+      [['⚔️ Удар', 'attack'],['🛡️ Щит ('+shields+')','shield'],['💨 Уклониться','dodge'],['💣 Бомба ×'+data.items.bomb,'bomb'],['🕸️ Сеть ×'+data.items.net,'net']].forEach(([label,action])=>{
+        const b=document.createElement('button');b.type='button';b.textContent=label;b.disabled=(action==='shield'&&shields===0)||(action==='bomb'&&!data.items.bomb)||(action==='net'&&!data.items.net);b.onclick=()=>combat(action);actions.append(b);battleActions.push(b);
       });hudUpdate();
     }
-    function combat(action){if(!valid()||ended||!battle)return;let defended=false,evaded=false,damage=0;
-      if(action==='attack'){damage=1+Math.floor(Math.random()*3);battle.hp-=damage;}
+    function combat(action){if(!valid()||ended||!battle)return;let defended=false,evaded=false,usedNet=false,damage=0;
+      if(action==='attack'){damage=1+Math.floor(Math.random()*3)+(bonusPickaxe?1:0);battle.hp-=damage;}
       else if(action==='shield'&&shields>0){shields--;defended=true;battle.hp-=1;damage=1;}
       else if(action==='dodge'){evaded=Math.random()<.7;if(evaded){battle.hp-=1;damage=1;}}
-      if(battle.hp<=0){defeated++;data.mobs++;writeCollection(data);log('🏆 '+battle.name+' побеждён! Урон: '+damage+'.');ach('Охотник на мобов');battle=null;renderBattle();return;}
+      else if(action==='bomb'&&data.items.bomb>0){data.items.bomb--;damage=3;battle.hp-=damage;writeCollection(data);}
+      else if(action==='net'&&data.items.net>0){data.items.net--;usedNet=true;writeCollection(data);}
+      if(battle.hp<=0){const defeatedMob=battle.id;defeated++;data.mobs++;const drop=DROPS.find(d=>d.from===defeatedMob);if(drop){const amount=1+(Math.random()<.35?1:0);data.drops[drop.id]=(Number(data.drops[drop.id])||0)+amount;writeCollection(data);log('🏆 '+battle.name+' побеждён! Выпало: '+drop.icon+' '+drop.name+' ×'+amount+'.');}ach('Охотник на мобов');battle=null;renderBattle();return;}
       battle.turn++;
       const explodes=battle.id==='creeper'&&battle.turn>=2;const hit=battle.id==='creeper'&&!explodes?0:battle.damage;
-      const taken=defended||evaded?0:hit;
+      const taken=defended||evaded||usedNet?0:hit;
       hp=Math.max(0,hp-taken);
-      log((damage?'⚔️ Ты нанёс '+damage+' урона. ':'')+(defended?'🛡️ Щит защитил!':evaded?'💨 Ты увернулся!':'💥 '+battle.name+' нанёс '+taken+' урона!'));
+      log((damage?'⚔️ Ты нанёс '+damage+' урона. ':'')+(usedNet?'🕸️ Сеть опутала моба — он пропустил ход!':defended?'🛡️ Щит защитил!':evaded?'💨 Ты увернулся!':'💥 '+battle.name+' нанёс '+taken+' урона!'));
       if(hp===0){battle=null;finish(false);return;}if(explodes){log('💥 Крипер взорвался! '+(taken?'Потеряно '+taken+' здоровья.':'Щит или уклонение спасли тебя!'));battle=null;}renderBattle();
     }
     function collection(){collectionBox.hidden=!collectionBox.hidden;if(collectionBox.hidden)return;
       const heading=document.createElement('strong');heading.textContent='🎒 Твоя коллекция руды';const grid=document.createElement('div');grid.className='mine61-collection-grid';
       for(const ore of ORES){const span=document.createElement('span');span.textContent=ore.icon+' '+ore.name+': '+(data.ores[ore.id]||0);grid.append(span);}
+      const dropTitle=document.createElement('strong');dropTitle.textContent='🧟 Трофеи с мобов';const dropGrid=document.createElement('div');dropGrid.className='mine61-collection-grid';for(const drop of DROPS){const span=document.createElement('span');span.textContent=drop.icon+' '+drop.name+': '+(data.drops[drop.id]||0);dropGrid.append(span);}
       const foot=document.createElement('p');foot.className='mine61-hint';foot.textContent='🏆 Побед: '+data.wins+' · ⚔️ Побеждено мобов: '+data.mobs+' · ⛏️ Заходов: '+data.runs;
-      collectionBox.replaceChildren(heading,grid,foot);
+      collectionBox.replaceChildren(heading,grid,dropTitle,dropGrid,foot);
     }
     function finish(won){if(ended||!valid())return;ended=true;torchMode=false;battle=null;battleActions=[];battleBox.hidden=true;field.hidden=true;out.replaceChildren();
       if(won){data.wins++;writeCollection(data);rewardChallenge(10+Math.round(points*.7),'Сокровища шахты добыты!');ach('Шахтёр');out.replaceChildren();}
@@ -153,14 +175,17 @@
       if(!won){const note=document.createElement('p');note.textContent='Попробуй лёгкий уровень, используй факелы и щит. Собранная руда не пропадает.';out.append(note);}
       const actions=document.createElement('div');actions.className='mine61-result';out.append(actions);
       const again=document.createElement('button');again.textContent='⛏️ Новая шахта';again.onclick=mine;actions.append(again);
+      const workshopAgain=document.createElement('button');workshopAgain.textContent='🛠️ Мастерская';workshopAgain.onclick=()=>{workshopOpen=false;workshop();};actions.append(workshopAgain);
       const show=document.createElement('button');show.textContent='🎒 Мои руды';show.onclick=()=>{const old=out.querySelector('.mine61-collection');if(old){old.remove();return;}const div=document.createElement('div');div.className='mine61-collection';div.innerHTML='<strong>🎒 Добытые руды</strong>';const grid=document.createElement('div');grid.className='mine61-collection-grid';for(const ore of ORES){const item=document.createElement('span');item.textContent=ore.icon+' '+ore.name+': '+(data.ores[ore.id]||0);grid.append(item)}div.append(grid);out.append(div)};actions.append(show);
     }
+    function workshop(){if(!valid())return;workshopOpen=!workshopOpen;const old=out.querySelector('.mine61-workshop');if(old){old.remove();if(!workshopOpen)return;}const box=document.createElement('div');box.className='mine61-collection mine61-workshop';const title=document.createElement('strong');title.textContent='🛠️ Мастерская — создай полезные предметы';box.append(title);const inventory=document.createElement('p');inventory.className='mine61-hint';inventory.textContent='Руды: '+ORES.map(o=>o.icon+' '+(data.ores[o.id]||0)).join(' · ')+' | Трофеи: '+DROPS.map(d=>d.icon+' '+(data.drops[d.id]||0)).join(' · ');box.append(inventory);const stash=document.createElement('p');stash.className='mine61-hint';stash.textContent='🎒 Предметы: '+RECIPES.map(r=>r.icon+' '+r.name+' ×'+(data.items[r.id]||0)).join(' · ');box.append(stash);RECIPES.forEach(recipe=>{const row=document.createElement('div');row.className='mine61-recipe';const info=document.createElement('div');const name=document.createElement('strong');name.textContent=recipe.icon+' '+recipe.name+' ×'+(data.items[recipe.id]||0);const desc=document.createElement('p');desc.className='mine61-hint';desc.textContent=recipe.desc+' · Нужно: '+Object.entries(recipe.cost).map(([id,n])=>{const item=DROPS.find(d=>d.id===id)||ORES.find(o=>o.id===id);return (item?.icon||'')+' '+(item?.name||id)+' ×'+n}).join(', ');info.append(name,desc);const make=document.createElement('button');make.type='button';make.textContent='Создать';make.disabled=Object.entries(recipe.cost).some(([id,n])=>(data.drops[id]??data.ores[id]??0)<n);make.onclick=()=>{for(const [id,n] of Object.entries(recipe.cost)){if(data.drops[id]!==undefined)data.drops[id]-=n;else data.ores[id]-=n;}data.items[recipe.id]=(data.items[recipe.id]||0)+1;data.crafted[recipe.id]=(data.crafted[recipe.id]||0)+1;if(!ended&&recipe.id==='armor'){shields+=3;data.items.armor--;}if(!ended&&recipe.id==='pickaxe'){bonusPickaxe=true;data.items.pickaxe--;}writeCollection(data);ach('Мастер шахты');log('✨ Создано: '+recipe.name+'!');box.remove();workshopOpen=false;hudUpdate();workshop();};row.append(info,make);box.append(row)});out.append(box);}
     torchBtn.onclick=()=>{if(!valid()||battle||ended||torches===0)return;torchMode=!torchMode;log(torchMode?'🔦 Нажми на блок — факел покажет содержимое соседних клеток.':'⛏️ Режим добычи.');hudUpdate();};
-    collectionBtn.onclick=collection;
+    potionBtn.onclick=()=>{if(!valid()||ended||battle||!data.items.potion||hp>=settings.hp)return;data.items.potion--;const healed=Math.min(5,settings.hp-hp);hp+=healed;writeCollection(data);log('🧪 Зелье использовано: +'+healed+' здоровья!');hudUpdate();};
+    collectionBtn.onclick=collection;workshopBtn.onclick=workshop;
     document.addEventListener('keydown',function combatKeys(e){if(!valid()||ended){document.removeEventListener('keydown',combatKeys,true);return;}if(!battle||e.altKey||e.ctrlKey||e.metaKey)return;
       const idx=e.code==='Digit1'||e.code==='Numpad1'||e.code==='Space'?0:e.code==='Digit2'||e.code==='Numpad2'?1:e.code==='Digit3'||e.code==='Numpad3'?2:-1;
       if(idx>=0){e.preventDefault();e.stopPropagation();if(!e.repeat&&battleActions[idx]&&!battleActions[idx].disabled)battleActions[idx].click();}
     },true);
-    hudUpdate();log('⛏️ Добудь '+settings.goal+' рудных блоков и не потеряй всё здоровье!');
+    hudUpdate();log('⛏️ Добудь '+settings.goal+' рудных блоков. Побеждай мобов, собирай трофеи и создавай снаряжение в мастерской!');
   };
 })();
