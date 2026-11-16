@@ -40,7 +40,7 @@
   window.startCity62=function({difficulty,makeMaze,field,out,rewardChallenge,ach,btn,challengeFail,changeCoins,clear}){
     clear();const token=window.__city70Token=(window.__city70Token||0)+1;
     const size=difficulty==='easy'?9:difficulty==='hard'?13:11,maxMoves=difficulty==='easy'?150:difficulty==='hard'?230:190,maxHealth=difficulty==='easy'?5:3,required=difficulty==='hard'?4:3;
-    const map=makeMaze(size),start={x:1,y:1},portal={x:1,y:1},pos={x:1,y:1};let facing=1;
+    const map=makeMaze(size),start={x:1,y:1},portal={x:1,y:1},pos={x:1,y:1};let facing=DIRS.findIndex(([dx,dy])=>!!(map[start.y+dy]&&map[start.y+dy][start.x+dx]===0));if(facing<0)facing=1;
     const reachable=[];for(let y=1;y<size-1;y++)for(let x=1;x<size-1;x++)if(map[y][x]===0&&!(x===1&&y===1))reachable.push({x,y});shuffle(reachable);
     const relics=reachable.splice(0,required).map(p=>({...p,found:false})),chestCount=difficulty==='easy'?3:difficulty==='hard'?5:4,chests=reachable.splice(0,chestCount).map(p=>({...p,opened:false})),sensorCount=difficulty==='easy'?3:difficulty==='hard'?7:5,sensors=reachable.splice(0,sensorCount).map(p=>({...p,triggered:false})),woolCount=difficulty==='hard'?2:3,wool=reachable.splice(0,woolCount),wardenSpawn={...(reachable.pop()||{x:size-2,y:size-2})};let warden={...wardenSpawn};
     const stats=readStats();stats.runs++;saveStats(stats);let moves=0,health=maxHealth,lantern=difficulty==='hard'?2:3,noise=0,wardenAwake=false,wardenStun=0,wardenStep=0,done=false,crouching=false,mapOpen=false;
