@@ -71,16 +71,57 @@
       return sh;
     }
     function makeAtlas(){
-      const atlas=document.createElement('canvas');atlas.width=256;atlas.height=64;
+      // Four Minecraft-style block textures, each authored on an exact 16x16 pixel grid.
+      const atlas=document.createElement('canvas');atlas.width=64;atlas.height=16;
       const c=atlas.getContext('2d');c.imageSmoothingEnabled=false;
-      const palettes=[['#26363d','#35464d','#1d2a31','#405158','#2b3b42'],['#202e35','#33434a','#1a272e','#405057','#29383f'],['#2b3b42','#35464d','#25343b','#3d4e54','#293940'],['#0b292e','#10383b','#17484a','#1b5554','#12383c']];
-      for(let t=0;t<4;t++){
-        const ox=t*64,p=palettes[t];c.fillStyle=p[0];c.fillRect(ox,0,64,64);
-        if(t===0){for(let row=0;row<4;row++)for(let col=0;col<2;col++){const x=ox+col*32+(row%2?0:16),y=row*16,n=(row*3+col*2)%p.length;c.fillStyle=p[n];c.fillRect(x+1,y+1,30,14);c.fillStyle='#101c22';c.fillRect(x,y+14,32,2);c.fillStyle='rgba(120,145,148,.18)';c.fillRect(x+3,y+3,10,1)}}
-        else if(t===1){for(let row=0;row<4;row++)for(let col=0;col<4;col++){const x=ox+col*16,y=row*16,n=(row*7+col*3)%p.length;c.fillStyle=p[n];c.fillRect(x+1,y+1,14,14);c.fillStyle='rgba(5,13,18,.5)';c.fillRect(x+1,y+13,14,2);c.fillStyle='rgba(143,165,164,.2)';c.fillRect(x+3,y+3,5,1)}}
-        else if(t===2){for(let y=0;y<64;y+=16)for(let x=0;x<64;x+=16){c.fillStyle=p[(x/16+y/16)%p.length];c.fillRect(ox+x+1,y+1,14,14);c.fillStyle='rgba(170,195,194,.16)';c.fillRect(ox+x+3,y+3,9,1);c.fillStyle='rgba(3,12,17,.28)';c.fillRect(ox+x+1,y+14,14,1)}}
-        else{for(let y=0;y<64;y+=8)for(let x=0;x<64;x+=8){const n=(x*3+y*5)%p.length;c.fillStyle=p[n];c.fillRect(ox+x,y,8,8);if((x*7+y*11)%5===0){c.fillStyle='#238b83';c.fillRect(ox+x+2,y+2,3,3);c.fillStyle='#9affed';c.fillRect(ox+x+3,y+2,1,1)}}}
+      const px=(tile,x,y,color)=>{c.fillStyle=color;c.fillRect(tile*16+x,y,1,1)};
+      const rect=(tile,x,y,w,h,color)=>{c.fillStyle=color;c.fillRect(tile*16+x,y,w,h)};
+      // 0 — deepslate bricks: offset 8x4 brick courses and dark mortar.
+      rect(0,0,0,16,16,'#202c32');
+      for(let row=0;row<4;row++){
+        const y=row*4,offset=row%2?0:4;
+        rect(0,0,y,16,1,'#111b21');
+        for(let col=0;col<2;col++){
+          const x=col*8+offset;
+          rect(0,x,y+1,7,3,['#35464d','#2d3e45','#3a4a50','#293940'][row]);
+          rect(0,x+1,y+1,4,1,'#40535a');
+          rect(0,x,y+3,7,1,'#1b292f');
+          px(0,x+5,y+2,'#26363d');
+        }
+        rect(0,0,y+1,1,3,'#111b21');
+        if(offset===0)rect(0,8,y+1,1,3,'#111b21');
       }
+      // 1 — polished deepslate: calm dark stone with sparse mineral flecks.
+      rect(1,0,0,16,16,'#303f46');
+      for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+        const n=(x*17+y*29+x*y*3)%31;
+        if(n===0||n===7)px(1,x,y,'#405158');
+        else if(n===3||n===19)px(1,x,y,'#29383f');
+        else if(n===12)px(1,x,y,'#36474e');
+      }
+      rect(1,2,2,5,1,'#3b4d54');rect(1,3,3,3,1,'#35464d');
+      rect(1,10,11,4,1,'#27373e');px(1,12,12,'#405158');
+      // 2 — chiseled deepslate: inset square tiles and beveled pixel edges.
+      rect(2,0,0,16,16,'#1c2a30');
+      rect(2,1,1,14,14,'#34454c');rect(2,2,2,12,12,'#2d3e45');
+      rect(2,3,3,10,1,'#485a60');rect(2,3,4,1,8,'#405259');
+      rect(2,4,12,9,1,'#1b292f');rect(2,13,4,1,8,'#19272d');
+      rect(2,5,5,6,6,'#26373e');rect(2,6,6,4,4,'#304249');
+      px(2,7,7,'#40565c');px(2,8,8,'#1b3036');
+      // 3 — sculk: deep teal base, pixel veins and bright cyan growth.
+      rect(3,0,0,16,16,'#09272d');
+      for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+        const n=(x*37+y*19+x*y*11+13)%47;
+        if(n<5)px(3,x,y,'#103a40');
+        else if(n===8||n===21)px(3,x,y,'#16484b');
+        else if(n===30)px(3,x,y,'#0d3137');
+      }
+      const veins=[[2,3],[3,4],[4,5],[5,6],[6,7],[10,2],[10,3],[9,4],[8,5],[12,10],[11,11],[10,12],[4,12],[5,11],[6,10]];
+      for(const [x,y] of veins)px(3,x,y,'#17615e');
+      for(const [x,y] of [[3,4],[5,6],[9,4],[11,11],[5,11],[13,7],[7,2]]){
+        px(3,x,y,'#238b83');px(3,x+1,y,'#15534f');px(3,x,y+1,'#10433f');
+      }
+      for(const [x,y] of [[3,4],[9,4],[11,11],[5,11]])px(3,x,y,'#79e8d7');
       return atlas;
     }
     function initGL(){
@@ -107,7 +148,7 @@
     function matMultiply(a,b){const o=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];return o}
     function resize(){const r=view.getBoundingClientRect();cssW=Math.max(280,Math.floor(r.width||360));cssH=Math.max(250,Math.floor(r.height||300));dpr=Math.min(2,Math.max(1,window.devicePixelRatio||1));canvas.width=Math.floor(cssW*dpr);canvas.height=Math.floor(cssH*dpr);canvas.style.width='100%';canvas.style.height='100%';if(glReady){gl.viewport(0,0,canvas.width,canvas.height);drawScene()}}
     function addCube(out,cx,cy,cz,sx,sy,sz,type,tint,yaw,rz){
-      const tile=type===0||type===1||type===2||type===3?type:0,u0=(tile*64+2)/256,u1=((tile+1)*64-2)/256,v0=.035,v1=.965;
+      const tile=type===0||type===1||type===2||type===3?type:0,u0=(tile*16+.5)/64,u1=((tile+1)*16-.5)/64,v0=.5/16,v1=15.5/16;
       const faces=[{p:[[-.5,-.5,-.5],[.5,-.5,-.5],[.5,.5,-.5],[-.5,.5,-.5]],l:.88},{p:[[.5,-.5,.5],[-.5,-.5,.5],[-.5,.5,.5],[.5,.5,.5]],l:.68},{p:[[-.5,.5,-.5],[.5,.5,-.5],[.5,.5,.5],[-.5,.5,.5]],l:1.18},{p:[[-.5,-.5,.5],[.5,-.5,.5],[.5,-.5,-.5],[-.5,-.5,-.5]],l:.48},{p:[[-.5,-.5,.5],[-.5,-.5,-.5],[-.5,.5,-.5],[-.5,.5,.5]],l:.76},{p:[[.5,-.5,-.5],[.5,-.5,.5],[.5,.5,.5],[.5,.5,-.5]],l:.98}],uv=[[u0,v0],[u1,v0],[u1,v1],[u0,v1]],order=[0,1,2,0,2,3],co=Math.cos(yaw||0),si=Math.sin(yaw||0),cr=Math.cos(rz||0),sr=Math.sin(rz||0),base=tint||[1,1,1];
       for(const face of faces)for(const idx of order){const p=face.p[idx];let x=p[0]*sx,y=p[1]*sy,z=p[2]*sz;const rx=x*cr-y*sr,ry=x*sr+y*cr,wx=cx+rx*co+z*si,wz=cz-rx*si+z*co,t=uv[idx];out.push(wx,cy+ry,wz,t[0],t[1],base[0]*face.l,base[1]*face.l,base[2]*face.l)}
     }
