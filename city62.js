@@ -71,51 +71,41 @@
       return sh;
     }
     function makeAtlas(){
-      // Six exact 32x32 pixel-art tiles: four Ancient City blocks and two dedicated Warden skins.
+      // Six 32x32 nearest-neighbour pixel-art tiles.
       const T=32,atlas=document.createElement('canvas');atlas.width=192;atlas.height=32;
       const c=atlas.getContext('2d');c.imageSmoothingEnabled=false;
       const px=(tile,x,y,color)=>{c.fillStyle=color;c.fillRect(tile*T+x,y,1,1)};
       const rect=(tile,x,y,w,h,color)=>{c.fillStyle=color;c.fillRect(tile*T+x,y,w,h)};
       const noise=(tile,base,colors,seed,rate)=>{rect(tile,0,0,T,T,base);for(let y=0;y<T;y++)for(let x=0;x<T;x++){const n=(x*37+y*19+x*y*11+seed)%rate;if(n<colors.length)px(tile,x,y,colors[n])}};
-      // 0: deepslate bricks — staggered 8x4 courses with hand-pixelled bevels.
+      // 0: deepslate bricks.
       rect(0,0,0,T,T,'#202c32');
       for(let row=0;row<8;row++){
-        const y=row*4,offset=row%2?0:4;
-        rect(0,0,y,T,1,'#111b21');
-        for(let col=0;col<4;col++){
-          const x=col*8+offset;
-          rect(0,x,y+1,7,3,['#35464d','#2d3e45','#3a4a50','#293940'][row%4]);
-          rect(0,x+1,y+1,4,1,'#40535a');rect(0,x,y+3,7,1,'#1b292f');
-          px(0,x+5,y+2,'#26363d');px(0,x+6,y+1,'#465960');
-        }
+        const y=row*4,offset=row%2?0:4;rect(0,0,y,T,1,'#111b21');
+        for(let col=0;col<4;col++){const x=col*8+offset;rect(0,x,y+1,7,3,['#35464d','#2d3e45','#3a4a50','#293940'][row%4]);rect(0,x+1,y+1,4,1,'#40535a');rect(0,x,y+3,7,1,'#1b292f');px(0,x+5,y+2,'#26363d');px(0,x+6,y+1,'#465960')}
         rect(0,0,y+1,1,3,'#111b21');if(offset===0)rect(0,16,y+1,1,3,'#111b21');
       }
-      // 1: polished deepslate — subtle cloudy mineral grain and a few pale flecks.
+      // 1: polished deepslate.
       noise(1,'#303f46',['#35474e','#293940','#40545b','#2c3c43'],17,41);
       for(let i=0;i<18;i++){const x=(i*13+3)%30,y=(i*19+5)%30;px(1,x,y,'#53656b');if(i%3===0)px(1,x+1,y,'#3d5057')}
       rect(1,4,5,8,1,'#3c5057');rect(1,5,6,5,1,'#35474e');rect(1,19,22,8,1,'#26373e');
-      // 2: chiseled deepslate — framed inset panel, beveled in 1px steps.
+      // 2: chiseled deepslate.
       rect(2,0,0,T,T,'#1b292f');rect(2,1,1,30,30,'#34464d');rect(2,2,2,28,28,'#2b3c43');
       rect(2,3,3,26,2,'#4b5e65');rect(2,3,5,2,22,'#40545b');rect(2,5,27,22,2,'#18262c');rect(2,27,5,2,22,'#17252b');
       rect(2,7,8,18,16,'#26383f');rect(2,9,10,14,12,'#30434a');rect(2,11,12,10,8,'#293b42');
       for(let i=0;i<8;i++)px(2,8+i*2,9+(i%3),'#465a61');
-      // 3: sculk — dark teal cellular pattern, branching veins and cyan nodes.
+      // 3: sculk.
       noise(3,'#09272d',['#103a40','#16484b','#0d3137','#0b3036','#124047'],13,37);
       const veins=[[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10],[10,11],[11,12],[12,13],[22,3],[21,4],[20,5],[19,6],[18,7],[17,8],[16,9],[15,10],[14,11],[13,12],[5,25],[6,24],[7,23],[8,22],[9,21],[24,23],[23,22],[22,21],[21,20]];
       for(const [x,y] of veins)px(3,x,y,'#17615e');
-      for(const [x,y] of [[4,5],[8,9],[20,5],[16,9],[7,23],[22,21],[13,12],[25,12],[11,27]]){
-        rect(3,x,y,2,2,'#238b83');px(3,x,y,'#79e8d7');px(3,x+1,y+1,'#15534f');
-      }
-      // 4: Warden hide — dark blue-black hide with pixel mottling and cyan rib markings.
-      noise(4,'#101e27',['#142b34','#1b3540','#0c1821','#203a43','#12242e'],29,43);
-      for(let y=4;y<29;y+=5){rect(4,5,y,22,1,'#294650');rect(4,7,y+1,18,1,'#172d37')}
-      for(const [x,y] of [[5,7],[8,10],[23,8],[26,12],[7,22],[24,24],[14,4],[18,27]]){px(4,x,y,'#3b5960');px(4,x+1,y,'#203d46')}
-      // 5: Warden chest/head accents — layered sculk core, turquoise ribs and cyan highlights.
-      rect(5,0,0,T,T,'#102a32');rect(5,2,2,28,28,'#173943');rect(5,4,4,24,24,'#0d252d');
-      rect(5,7,6,18,20,'#15515a');rect(5,9,8,14,16,'#1c6970');rect(5,11,10,10,12,'#0b343d');
-      for(let y=7;y<26;y+=4){rect(5,5,y,22,1,'#267b7b');rect(5,7,y+1,18,1,'#123f49')}
-      rect(5,13,11,6,10,'#1b7777');rect(5,14,12,4,8,'#39b5ad');rect(5,15,13,2,6,'#79e8d7');
-      for(const [x,y] of [[8,7],[23,7],[7,24],[24,24],[12,5],[19,26]])px(5,x,y,'#8bf5e7');
+      for(const [x,y] of [[4,5],[8,9],[20,5],[16,9],[7,23],[22,21],[13,12],[25,12],[11,27]]){rect(3,x,y,2,2,'#238b83');px(3,x,y,'#79e8d7');px(3,x+1,y+1,'#15534f')}
+      // 4: Warden skin — mostly matte blue-black with sparse pixel mottling, no mechanical stripes.
+      noise(4,'#101d27',['#142b34','#1b3540','#0c1821','#203a43','#12242e','#172c36'],29,53);
+      for(const [x,y] of [[4,6],[9,11],[24,7],[27,14],[7,23],[22,25],[14,4],[18,28],[11,18],[25,20],[5,28],[29,4]]){px(4,x,y,'#34515b');if(x<29)px(4,x+1,y,'#1b3540')}
+      // 5: a simple cyan soul-core, used only on the small chest organ.
+      rect(5,0,0,T,T,'#0b252d');rect(5,3,3,26,26,'#123943');rect(5,5,5,22,22,'#0b2b34');
+      rect(5,11,7,10,18,'#155b61');rect(5,12,8,8,16,'#218b89');rect(5,14,9,4,14,'#4bc9bd');
+      rect(5,15,10,2,12,'#8bf5e7');rect(5,13,8,6,2,'#68e2d3');rect(5,13,23,6,2,'#176c70');
+      px(5,12,7,'#69e4d6');px(5,19,7,'#69e4d6');px(5,12,24,'#176c70');px(5,19,24,'#176c70');
       return atlas;
     }
     function initGL(){
@@ -149,54 +139,49 @@
     function drawWarden3D(add,x,z){
       const yaw=Math.atan2(pos.x*2+1-x,-(pos.y*2+1-z));
       const part=(lx,y,lz,sx,sy,sz,type,tint,rz)=>{const wx=x+lx*Math.cos(yaw)+lz*Math.sin(yaw),wz=z-lx*Math.sin(yaw)+lz*Math.cos(yaw);add(wx,y,wz,sx,sy,sz,type,tint,yaw,rz||0)};
-      const hide=[.92,1,1],hideShade=[.68,.84,.9],chest=[.88,1,1],rib=[.45,1,1],glow=wardenAwake?[.42,1,1]:[.14,.42,.48];
-      const breathe=Math.sin(Date.now()/(wardenAwake?250:900))*(wardenAwake?.025:.012);
+      const skin=[.86,.96,1],shade=[.62,.8,.88],sculk=[.48,.9,.94],cyan=wardenAwake?[.55,1,1]:[.18,.52,.58];
+      const breathe=Math.sin(Date.now()/(wardenAwake?270:950))*(wardenAwake?.018:.008);
       if(!wardenAwake){
-        // Sleeping Warden: a low horizontal silhouette, head resting on one side.
-        part(-.05,.43,0,1.12,.48,.66,4,hide,-.03);
-        part(.68,.48,-.02,.68,.58,.62,4,hideShade);
-        part(.98,.68,-.03,.2,.46,.22,4,hide,-.34);
-        part(1.12,.84,-.03,.16,.16,.18,4,hideShade,-.18);
-        part(-.72,.32,.12,.42,.34,.48,4,hide,-.16);
-        part(-.68,.28,-.28,.42,.3,.34,4,hideShade,.12);
-        part(-.28,.19,-.02,.3,.2,.4,4,hideShade);
-        part(.18,.18,.18,.3,.2,.36,4,hideShade);
-        part(.43,.5,-.345,.34,.3,.06,5,chest);
-        part(.43,.5,-.39,.2,.2,.035,3,glow);
-        part(.76,.53,-.34,.07,.07,.035,3,[.38,.95,1]);
+        // Quiet, low silhouette: the Warden is dormant beneath the sculk.
+        part(0,.28,0,1.08,.34,.68,4,shade);
+        part(0,.42,-.08,.78,.34,.55,4,skin);
+        part(.52,.48,-.02,.42,.25,.42,4,shade,-.12);
+        part(-.52,.48,-.02,.42,.25,.42,4,shade,.12);
+        part(0,.47,-.37,.22,.25,.035,5,cyan);
         return;
       }
-      // Standing Warden: broad torso, thick legs, long arms, large head and swept horns.
-      part(-.32,.48,0,.44,.9,.5,4,hideShade);
-      part(.32,.48,0,.44,.9,.5,4,hideShade);
-      part(-.32,.1,-.045,.5,.2,.62,4,hide);
-      part(.32,.1,-.045,.5,.2,.62,4,hide);
-      part(0,1.28+breathe,0,1.18,1.22,.68,4,hide);
-      part(0,1.31+breathe,-.035,.96,1.02,.7,5,chest);
-      part(-.72,1.26,0,.42,1.38,.54,4,hideShade,-.035);
-      part(.72,1.26,0,.42,1.38,.54,4,hideShade,.035);
-      part(-.76,.55,-.04,.48,.34,.52,4,hide);
-      part(.76,.55,-.04,.48,.34,.52,4,hide);
-      // Four broad ribs frame the glowing chest core.
-      for(let i=0;i<4;i++){
-        const yy=1.02+i*.17;
-        part(-.2,yy,-.39,.28,.065,.045,3,rib);
-        part(.2,yy,-.39,.28,.065,.045,3,rib);
+      // Minecraft-like silhouette: square head, broad torso, long arms and short sturdy legs.
+      // Legs and feet.
+      part(-.29,.48,.015,.43,.86,.58,4,shade);
+      part(.29,.48,.015,.43,.86,.58,4,shade);
+      part(-.29,.09,-.10,.48,.18,.72,4,skin);
+      part(.29,.09,-.10,.48,.18,.72,4,skin);
+      // Torso: one broad, simple cuboid rather than layered mechanical armour.
+      part(0,1.38+breathe,0,1.16,1.28,.72,4,skin);
+      // Long rectangular arms and blocky hands.
+      part(-.76,1.27,0,.38,1.34,.58,4,shade,-.025);
+      part(.76,1.27,0,.38,1.34,.58,4,shade,.025);
+      part(-.77,.52,-.04,.4,.36,.54,4,skin);
+      part(.77,.52,-.04,.4,.36,.54,4,skin);
+      // Broad square head with two tiny cyan eyes.
+      part(0,2.34+breathe,0,.88,.78,.7,4,skin);
+      part(-.19,2.37+breathe,-.365,.12,.075,.035,3,[.48,1,1]);
+      part(.19,2.37+breathe,-.365,.12,.075,.035,3,[.48,1,1]);
+      // Two swept, stepped horns. Their block segments make the classic Warden outline.
+      part(-.43,2.63,.015,.23,.34,.28,4,shade,-.16);
+      part(-.58,2.79,.015,.22,.34,.26,4,skin,-.38);
+      part(-.73,2.91,.015,.2,.22,.24,4,shade,-.58);
+      part(.43,2.63,.015,.23,.34,.28,4,shade,.16);
+      part(.58,2.79,.015,.22,.34,.26,4,skin,.38);
+      part(.73,2.91,.015,.2,.22,.24,4,shade,.58);
+      // Sparse cyan rib marks and a small bright soul core on the chest.
+      for(let i=0;i<3;i++){
+        const yy=1.12+i*.19;
+        part(-.22,yy,-.37,.23,.045,.035,3,sculk);
+        part(.22,yy,-.37,.23,.045,.035,3,sculk);
       }
-      part(0,1.31+breathe,-.405,.34,.47,.08,5,chest);
-      part(0,1.34+breathe,-.455,.19,.29,.045,3,glow);
-      part(0,1.38+breathe,-.49,.075,.13,.025,3,[.82,1,1]);
-      // Broad square head, glowing eyes and unmistakable swept-back horns.
-      part(0,2.28+breathe,0,.9,.78,.72,4,hide);
-      part(0,2.29+breathe,-.035,.78,.66,.72,5,chest);
-      part(-.2,2.31+breathe,-.405,.13,.09,.035,3,[.45,1,1]);
-      part(.2,2.31+breathe,-.405,.13,.09,.035,3,[.45,1,1]);
-      part(-.62,2.55,0,.24,.68,.3,4,hide,-.43);
-      part(.62,2.55,0,.24,.68,.3,4,hide,.43);
-      part(-.79,2.82,.02,.2,.2,.24,5,chest,-.2);
-      part(.79,2.82,.02,.2,.2,.24,5,chest,.2);
-      part(-.34,1.68,-.02,.15,.24,.18,3,rib);
-      part(.34,1.68,-.02,.15,.24,.18,3,rib);
+      part(0,1.39+breathe,-.39,.23,.3,.055,5,cyan);
+      part(0,1.4+breathe,-.425,.09,.16,.025,3,[.78,1,1]);
     }
     function buildWorld(){
       const verts=[],add=(...a)=>addCube(verts,...a),worldX=x=>x*2+1,worldZ=y=>y*2+1;
