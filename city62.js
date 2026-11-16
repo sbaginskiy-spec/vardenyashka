@@ -70,8 +70,8 @@
     const stats=readStats();stats.runs++;saveStats(stats);let moves=0,health=maxHealth,lantern=difficulty==='hard'?2:3,noise=0,wardenAwake=false,wardenStun=0,done=false,crouching=false,mapOpen=false;
     // The player moves continuously in world space; grid cells are used only for collisions and discoveries.
     let cameraX=pos.x*2+1,cameraZ=pos.y*2+1,cameraYaw=facing*Math.PI/2,cameraPitch=0,cameraBob=0,cameraAnimation=null,cameraFrame=0,queuedAction=null,worldVerts=null,worldDirty=true;
-    const heldKeys=new Set(),heldPointers=new Map(),KEY_ACTION={ArrowUp:'forward',KeyW:'forward',ArrowDown:'back',KeyS:'back',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ShiftLeft:'sprint',ShiftRight:'sprint'};
-    let movementFrame=0,lastMovementTime=0,wallMessageAt=0;
+    const heldKeys=new Set(),heldPointers=new Map(),KEY_ACTION={ArrowUp:'forward',KeyW:'forward',ArrowDown:'back',KeyS:'back',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ControlLeft:'sprint',ControlRight:'sprint'};
+    let movementFrame=0,lastMovementTime=0,wallMessageAt=0,shiftCrouchPrevious=null;
     const PLAYER_RADIUS=.27,MOVE_SPEED=3.25,SPRINT_MULTIPLIER=1.7,TURN_SPEED=2.1;
     let wardenMotion=null,wardenAttackAt=0,wardenWakeAt=0,wardenFrame=0,wardenLastFrame=0;
     let wardenWorldX=wardenSpawn.x*2+1,wardenWorldZ=wardenSpawn.y*2+1,wardenWaypoint=null;
@@ -102,7 +102,7 @@
     function actionButton(text,aria,fn){const b=document.createElement('button');b.type='button';b.textContent=text;b.setAttribute('aria-label',aria);b.addEventListener('click',fn);actions.append(b);return b}
     const lanternBtn=actionButton('🔦 Фонарь ×'+lantern,'Использовать душевный фонарь',useLantern),mapBtn=actionButton('🗺️ Карта','Показать карту города',toggleMap),diaryBtn=actionButton('📜 Дневник','Открыть дневник экспедиции',diary);
     const mapPanel=document.createElement('div');mapPanel.className='city70-map';wrap.append(mapPanel);
-    const help=document.createElement('p');help.className='city70-help';help.textContent='Сундуки и реликвии теперь нужно брать вручную: подойди и нажми на предмет в 3D-мире (на ПК можно навести взгляд и нажать E). В правом верхнем углу 3D-окна — полноэкранный режим. Движение: удерживай «Вперёд» или «Назад», спринт — «🏃 Спринт» вместе с «Вперёд» (ПК W + Shift). Страж преследует постоянно, фонарь задерживает его на 4 секунды.';wrap.append(help);
+    const help=document.createElement('p');help.className='city70-help';help.textContent='Сундуки и реликвии теперь нужно брать вручную: подойди и нажми на предмет в 3D-мире (на ПК можно навести взгляд и нажать E). В правом верхнем углу 3D-окна — полноэкранный режим. Движение: удерживай «Вперёд» или «Назад», спринт — «🏃 Спринт» вместе с «Вперёд» (ПК W + Ctrl). Удерживай Shift или включи «Тихо», чтобы Страж перестал преследовать тебя; рядом он всё ещё опасен. Фонарь задерживает его на 4 секунды.';wrap.append(help);
     field.hidden=true;let cssW=360,cssH=300,dpr=1,pseudoFullscreen=false;
     const gl=canvas.getContext('webgl',{alpha:false,antialias:true,depth:true,stencil:false,powerPreference:'low-power'})||canvas.getContext('experimental-webgl',{alpha:false,antialias:true,depth:true,stencil:false});
     let glProgram=null,glBuffer=null,wardenBuffer=null,atlasTexture=null,glReady=false;
@@ -440,6 +440,7 @@
         updateHud();
         if(health<=0){finish(false,'Страж настиг тебя в Древнем городе.');return}
       }
+      if(crouching){wardenWaypoint=null;wardenMotion=null;return}
       if(dt<=0)return;
       // Follow the maze's open cells. Recalculate the next step whenever a waypoint is reached.
       if(!wardenWaypoint){
@@ -611,11 +612,12 @@
     function keyDown(e){
       if(done||token!==window.__city70Token||e.altKey||e.ctrlKey||e.metaKey)return;
       const target=e.target;if(target&&(target.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)))return;
+      if(e.code==='ShiftLeft'||e.code==='ShiftRight'){e.preventDefault();if(shiftCrouchPrevious===null){shiftCrouchPrevious=crouching;crouching=true;updateHud()}return}
       if(KEY_ACTION[e.code]){e.preventDefault();if(!e.repeat){heldKeys.add(e.code);if(KEY_ACTION[e.code]==='sprint')syncSprintButton();startMovementLoop()}}
       else if(e.code==='Space'&&!e.repeat){e.preventDefault();toggleCrouch()}
       else if(e.code==='KeyE'&&!e.repeat){e.preventDefault();interactCenter()}
     }
-    function keyUp(e){if(KEY_ACTION[e.code]){heldKeys.delete(e.code);if(KEY_ACTION[e.code]==='sprint')syncSprintButton();e.preventDefault()}}
+    function keyUp(e){if((e.code==='ShiftLeft'||e.code==='ShiftRight')&&shiftCrouchPrevious!==null){crouching=shiftCrouchPrevious;shiftCrouchPrevious=null;updateHud();e.preventDefault();return}if(KEY_ACTION[e.code]){heldKeys.delete(e.code);if(KEY_ACTION[e.code]==='sprint')syncSprintButton();e.preventDefault()}}
     keyHandler=keyDown;keyUpHandler=keyUp;document.addEventListener('keydown',keyHandler);document.addEventListener('keyup',keyUpHandler);window.addEventListener('blur',clearHeldInput);
     // Dragging the 3D viewport changes the camera freely; movement stays on the nearest maze direction.
     let lookDrag=null;
