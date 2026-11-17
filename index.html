@@ -344,7 +344,7 @@ function city(){
  clear();
  const heading=document.createElement('div');heading.className='adventure-info';heading.textContent='🏛️ Древний город — выбери режим игры';out.append(heading);
  const modes=document.createElement('div');modes.className='v5grid';modes.style.marginTop='12px';out.append(modes);
- const mazeBtn=btn('🧩 Классический лабиринт',()=>chooseDifficulty('🧩 Древний город — классический лабиринт',d=>startCity(d)));
+ const mazeBtn=btn('🧩 Классический лабиринт',()=>chooseDifficulty('🧩 Древний город — классический 3D-лабиринт',d=>{try{if(typeof window.startCityMaze3D==='function')window.startCityMaze3D({difficulty:d,makeMaze:randomMaze,field,out,rewardChallenge,ach,btn,challengeFail,changeCoins,clear});else startCity(d)}catch(error){console.error('Классический 3D-лабиринт:',error);startCity(d)}}));
  const betaBtn=btn('🏛️ Открытый город (БЕТА)',()=>chooseDifficulty('🏛️ Древний город — открытая бета',d=>{try{if(typeof window.startCity62==='function')window.startCity62({difficulty:d,makeMaze:randomMaze,field,out,rewardChallenge,ach,btn,challengeFail,changeCoins,clear});else startCity(d)}catch(error){console.error('Древний город БЕТА:',error);startCity(d)}}));
  modes.append(mazeBtn,betaBtn);
 }
@@ -475,4 +475,4 @@ group('adventure');openTab('home');
       if(button&&isVisible(button)){e.preventDefault();button.click()}
     }
   });
-})();</script><script defer src="mine61.js"></script><script defer src="city62.js?v=100"></script></body></html>
+})();</script><script defer src="mine61.js"></script><script defer src="cityMaze3D.js?v=1"></script><script defer src="city62.js?v=100"></script></body></html>
