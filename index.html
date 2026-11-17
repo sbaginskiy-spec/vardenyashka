@@ -340,7 +340,14 @@ function startParkour(d){
   if(steps===4)accumulator=0;draw();requestAnimationFrame(tick);
  }updateHud();draw();requestAnimationFrame(tick)
 }
-function city(){chooseDifficulty('🏛️ Древний город 7.23: открытый город, руины и портал',d=>{try{if(typeof window.startCity62==='function')window.startCity62({difficulty:d,makeMaze:randomMaze,field,out,rewardChallenge,ach,btn,challengeFail,changeCoins,clear});else startCity(d)}catch(error){console.error('Древний город 6.2:',error);startCity(d)}})}
+function city(){
+ clear();
+ const heading=document.createElement('div');heading.className='adventure-info';heading.textContent='🏛️ Древний город — выбери режим игры';out.append(heading);
+ const modes=document.createElement('div');modes.className='v5grid';modes.style.marginTop='12px';out.append(modes);
+ const mazeBtn=btn('🧩 Классический лабиринт',()=>chooseDifficulty('🧩 Древний город — классический лабиринт',d=>startCity(d)));
+ const betaBtn=btn('🏛️ Открытый город (БЕТА)',()=>chooseDifficulty('🏛️ Древний город — открытая бета',d=>{try{if(typeof window.startCity62==='function')window.startCity62({difficulty:d,makeMaze:randomMaze,field,out,rewardChallenge,ach,btn,challengeFail,changeCoins,clear});else startCity(d)}catch(error){console.error('Древний город БЕТА:',error);startCity(d)}}));
+ modes.append(mazeBtn,betaBtn);
+}
 function startCity(d){
  clear();const token=challengeToken,size=d==='easy'?7:d==='normal'?9:11,turns=d==='easy'?60:d==='normal'?66:70,required=3;
  let moves=turns,found=0,done=false,pos={x:1,y:1};const start={x:1,y:1};
